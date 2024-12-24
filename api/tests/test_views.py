@@ -17,7 +17,7 @@ class AuthenticationTest(TestCase):
             "email": "test.user@domain.com",
         }
         api_models.CustomUser.objects.create_user(**system_user_data, gender=male)
-        
+
         self.role = api_models.Role.objects.create(name="Headteacher")
 
     def setUp(self):
@@ -27,22 +27,23 @@ class AuthenticationTest(TestCase):
         # Generate JWT tokens
         self.refresh = RefreshToken.for_user(self.user)
         self.access_token = str(self.refresh.access_token)
+        
 
     def test_register_url(self):
         register_url = reverse("register")
-        self.assertEqual(register_url, "/v1/accounts/register/")
+        self.assertEqual(register_url, "/koms/accounts/register/")
 
     def test_register_new_user(self):
         REGISTER_URL = reverse("register")
         self.new_user_data = {
             "user": {
-                "username": "new_user",
+                "username": "frontdesk",
                 "first_name": "Test",
                 "last_name": "User - New",
             },
             "residential_address": "John Doe Street.",
             "email": "test.newuser@domain.com",
-            "password": "securepassword123",
+            "password": "frontdesk",
             "roles": [
                 # {"role": "8cefb839-208a-44a6-98f2-a545ed76d0a4"}
                 {"role": self.role.id}
@@ -64,7 +65,7 @@ class AuthenticationTest(TestCase):
 
     def test_logout_url(self):
         logout_url = reverse("logout")
-        self.assertEqual(logout_url, "/v1/accounts/logout/")
+        self.assertEqual(logout_url, "/koms/accounts/logout/")
 
     def test_logout(self):
         logout_url = reverse("logout")
@@ -89,7 +90,7 @@ class AuthenticationTest(TestCase):
 
     def test_change_password_url(self):
         change_password_url = reverse("change_password")
-        self.assertEqual(change_password_url, "/v1/accounts/change-password/")
+        self.assertEqual(change_password_url, "/koms/accounts/change-password/")
 
     def test_change_password(self):
         change_password_url = reverse("change_password")
@@ -111,7 +112,7 @@ class AuthenticationTest(TestCase):
         self.assertEqual(response.status_code, 400)
 
     def test_reset_password_url(self):
-        self.assertEqual("/v1/accounts/reset-password/", reverse("reset_password"))
+        self.assertEqual("/koms/accounts/reset-password/", reverse("reset_password"))
 
     def test_reset_password(self):
         reset_password_url = reverse("reset_password")

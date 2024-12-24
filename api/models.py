@@ -2,6 +2,7 @@ import os
 from django.utils import timezone
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser
+from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 import uuid
 from . import managers
 from django.conf import settings
@@ -38,12 +39,13 @@ class Role(BaseModel):
         db_table = "role"
 
 
-class CustomUser(AbstractBaseUser):
+class CustomUser(AbstractBaseUser, PermissionsMixin):
     username = models.CharField(unique=True, max_length=255)
     first_name = models.CharField(max_length=255)
     last_name = models.CharField(max_length=255)
     is_staff = models.BooleanField(default=False)
     is_superuser = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
 
     USERNAME_FIELD = "username"
     REQUIRED_FIELDS = ["first_name", "last_name"]
