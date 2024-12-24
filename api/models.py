@@ -124,6 +124,7 @@ class Profile(BaseModel):
     created_by = models.ForeignKey(
         "self", on_delete=models.SET_NULL, null=True, related_name="profiles_created"
     )
+    date_created = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return self.full_name
@@ -146,3 +147,216 @@ class ProfileRole(BaseModel):
         db_table = "profilerole"
         verbose_name = "Profile Role"
         verbose_name_plural = "Profile Roles"
+
+
+class Shift(BaseModel):
+    name = models.CharField(max_length=255, unique=True)
+    start_time = models.DateTimeField(default=timezone.now)
+    end_time = models.DateTimeField(default=timezone.now)
+    date_created = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
+
+
+class ProfileShiftAssign(BaseModel):
+    profile = models.ForeignKey(
+        Profile, on_delete=models.CASCADE, related_name="shifts"
+    )
+    shift = models.ForeignKey(Shift, on_delete=models.CASCADE)
+    date = models.DateField(default=timezone.now)
+    created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
+    date_created = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.profile} - {self.shift}"
+
+    class Meta:
+        db_table = "profileshiftassign"
+        verbose_name = "Shift Assignment"
+        verbose_name_plural = "Shift Assignments"
+
+
+class HotelFloor(BaseModel):
+    name = models.CharField(max_length=255)
+    created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
+    date_created = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = "hotelfloor"
+
+
+class RoomCategory(BaseModel):
+    name = models.CharField(max_length=255)
+    created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
+    date_created = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = "roomcategory"
+        verbose_name = "Room Category"
+        verbose_name_plural = "Room Categories"
+
+
+class HotelView(BaseModel):
+    name = models.CharField(max_length=255)
+    created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
+    date_created = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = "hotelview"
+        verbose_name = "Hotel View"
+        verbose_name_plural = "Hotel Views"
+
+
+class Amenity(BaseModel):
+    name = models.CharField(max_length=255)
+    created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
+    date_created = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = "amenities"
+        verbose_name = "Amenity"
+        verbose_name_plural = "Amenities"
+
+
+class RoomType(BaseModel):
+    name = models.CharField(max_length=255)
+    room_category = models.ForeignKey(
+        RoomCategory, on_delete=models.SET_NULL, null=True
+    )
+    area_in_meters = models.DecimalField(max_digits=4, decimal_places=1, default=0.0)
+    area_in_feet = models.DecimalField(max_digits=4, decimal_places=1, default=0.0)
+    max_guests = models.IntegerField(default=1)
+    bed = models.CharField(max_length=255)
+    view = models.ForeignKey(HotelView, on_delete=models.SET_NULL, null=True)
+    amenities = models.ManyToManyField(Amenity)
+    price_per_night = models.DecimalField(max_digits=6, decimal_places=2, default=0.00)
+    created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
+    date_created = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = "roomtype"
+        verbose_name = "Room Type"
+        verbose_name_plural = "Room Types"
+
+
+class Room(BaseModel):
+    room_number = models.CharField(max_length=255, db_index=True)
+    floor = models.ForeignKey(HotelFloor, on_delete=models.SET_NULL, null=True)
+    room_type = models.ForeignKey(RoomType, on_delete=models.SET_NULL, null=True)
+    price_per_night = models.DecimalField(max_digits=6, decimal_places=2, default=0.00)
+    is_occupied = models.BooleanField(default=False)
+    created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
+    date_created = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.room_number
+
+    class Meta:
+        db_table = "room"
+
+
+class RoomStatus(BaseModel):
+    name = models.CharField(max_length=255)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = "room"
+
+
+class RoomKeepingAssign(BaseModel):
+    room = models.ForeignKey(
+        Room, on_delete=models.CASCADE, related_name="maintenance_assignments"
+    )
+    shift = models.ForeignKey(Shift, on_delete=models.SET_NULL, null=True)
+    assignment_date = models.DateField(default=timezone.now)
+    assigned_to = models.ForeignKey(
+        Profile,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="room_keeping_duties",
+    )
+    created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
+    date_created = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.assigned_to} - {self.shift}"
+
+    class Meta:
+        db_table = "roomkeepingassign"
+        verbose_name = "Room Keeping Assignment"
+        verbose_name_plural = "Room Keeping Assignments"
+
+
+class RoomState(BaseModel):
+    # eg. used, assigned, cleaned, IP
+    name = models.CharField(max_length=255)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = "roomstate"
+        verbose_name = "Room State"
+        verbose_name_plural = "Room States"
+
+
+class RoomStateTrans(BaseModel):
+    # eg. used-to-assigned, assigned-to-cleaned, cleaned-to-IP, IP-to-used
+    from_state = models.ForeignKey(RoomState, on_delete=models.CASCADE)
+    to_state = models.ForeignKey(RoomState, on_delete=models.CASCADE)
+    created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
+    date_created = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.from_state} - {self.to_state}"
+
+    class Meta:
+        db_table = "roomstatetrans"
+        verbose_name = "Room State Transfer"
+        verbose_name_plural = "Room State Transfers"
+
+
+class ProcessRoomKeeping(BaseModel):
+    room = models.ForeignKey(Room, on_delete=models.CASCADE)
+    room_state_trans = models.ForeignKey(
+        RoomStateTrans, on_delete=models.SET_NULL, null=True
+    )
+    date_processed = models.DateTimeField(default=timezone.now)
+    shift = models.ForeignKey(Shift, on_delete=models.SET_NULL, null=True)
+    created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
+    date_created = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        # returns the final trans state of the room
+        return f"{self.room} - {self.room_state_trans.to_state.name}"
+    
+    class Meta:
+        db_table = "processroomkeeping"
+        verbose_name="Room Keeping"
+        verbose_name_plural="Room Keepings"
+
+
+class Booking(BaseModel):
+    check_in = models.DateField(default=timezone.now)
+    check_out = models.DateField(default=timezone.now)
+    room_category = models.ForeignKey(
+        RoomCategory, on_delete=models.SET_NULL, null=True
+    )
+    room_type = models.ForeignKey(RoomType, on_delete=models.SET_NULL, null=True)
+    room = models.ForeignKey(Room, on_delete=models.SET_NULL, null=True)
