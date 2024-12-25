@@ -50,6 +50,7 @@ class LogoutView(APIView):
 class PasswordChangeView(APIView):
     def post(self, request):
         try:
+            print(request.user)
             user_profile = models.Profile.objects.get(user=request.user)
             user = user_profile.user
             # password match verification to be done at the frontend
@@ -80,3 +81,34 @@ class PasswordResetView(generics.CreateAPIView):
 class ProfileList(generics.ListCreateAPIView):
     queryset = models.Profile.objects.all()
     serializer_class = api_serializers.CustomUserProfileSerializer
+
+class ProfileDetail(generics.RetrieveUpdateDestroyAPIView):
+    queryset = models.Profile.objects.all()
+    serializer_class = api_serializers.CustomUserProfileSerializer
+    lookup_url_kwarg = 'pk'
+    
+class RoomKeepingAssignCreate(generics.CreateAPIView):
+    queryset = models.RoomKeepingAssign.objects.all()
+    serializer_class = api_serializers.RoomKeepingAssignSerializer
+
+    def get_serializer_context(self):
+        try:
+            profile = models.Profile.objects.get(user=self.request.user)
+        except models.Profile.DoesNotExist:
+            return Response({"error": "user profile does not exist"}, status=status.HTTP_400_BAD_REQUEST)
+        context = super().get_serializer_context()
+        context["created_by"] = profile
+        return context
+    
+class RoomKeepingAssignUpdate(generics.UpdateAPIView):
+    queryset = models.RoomKeepingAssign.objects.all()
+    serializer_class = api_serializers.RoomKeepingAssignSerializer
+
+    def get_serializer_context(self):
+        try:
+            profile = models.Profile.objects.get(user=self.request.user)
+        except models.Profile.DoesNotExist:
+            return Response({"error": "user profile does not exist"}, status=status.HTTP_400_BAD_REQUEST)
+        context = super().get_serializer_context()
+        context["modified_by"] = profile
+        return context

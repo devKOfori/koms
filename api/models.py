@@ -3,7 +3,7 @@ from django.utils import timezone
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
-import uuid
+import uuid, datetime
 from . import managers
 from django.conf import settings
 from utils.system_variables import PASSWORD_RESET
@@ -30,7 +30,7 @@ class Department(BaseModel):
 
 class Role(BaseModel):
     # headmaster, principal, teacher, cook, student, guardian
-    name = models.CharField(max_length=255, unique=True, db_index=True)
+    name = models.CharField(max_length=255, db_index=True)
 
     def __str__(self):
         return self.name
@@ -39,7 +39,7 @@ class Role(BaseModel):
         db_table = "role"
 
 
-class CustomUser(AbstractBaseUser, PermissionsMixin):
+class CustomUser(AbstractBaseUser, BaseModel, PermissionsMixin):
     username = models.CharField(unique=True, max_length=255)
     first_name = models.CharField(max_length=255)
     last_name = models.CharField(max_length=255)
@@ -59,6 +59,10 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     def has_module_perms(self, app_label):
         # Allow access to all app modules; customize as needed
         return True
+
+    class Meta:
+        verbose_name = "User"
+        verbose_name_plural = "Users"
 
 
 PASSWORD_RESET_CHANNEL_CHOICES = [("email", "Email"), ("sms", "SMS")]
@@ -111,8 +115,10 @@ class Profile(BaseModel):
     user = models.ForeignKey(
         CustomUser, on_delete=models.CASCADE, related_name="profile"
     )
-    department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True)
-    role = models.ManyToManyField(
+    department = models.ForeignKey(
+        Department, on_delete=models.SET_NULL, null=True, related_name="profiles"
+    )
+    profile_roles = models.ManyToManyField(
         Role, through="ProfileRole", through_fields=("profile", "role")
     )
     birthdate = models.DateField(null=True)
@@ -151,13 +157,17 @@ class ProfileRole(BaseModel):
 
 class Shift(BaseModel):
     name = models.CharField(max_length=255, unique=True)
-    start_time = models.DateTimeField(default=timezone.now)
-    end_time = models.DateTimeField(default=timezone.now)
+    start_time = models.TimeField(default=timezone.now)
+    end_time = models.TimeField(default=timezone.now)
     date_created = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
 
+    def __str__(self):
+        return self.name
+
 
 class ProfileShiftAssign(BaseModel):
+    department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True)
     profile = models.ForeignKey(
         Profile, on_delete=models.CASCADE, related_name="shifts"
     )
@@ -167,7 +177,7 @@ class ProfileShiftAssign(BaseModel):
     date_created = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.profile} - {self.shift}"
+        return f"{self.profile} - {datetime.datetime.strftime(self.date, '%a %d %b %Y')} - {self.shift}"
 
     class Meta:
         db_table = "profileshiftassign"
@@ -276,7 +286,7 @@ class RoomStatus(BaseModel):
         return self.name
 
     class Meta:
-        db_table = "room"
+        db_table = "roomstatus"
 
 
 class RoomKeepingAssign(BaseModel):
@@ -291,8 +301,20 @@ class RoomKeepingAssign(BaseModel):
         null=True,
         related_name="room_keeping_duties",
     )
-    created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
+    created_by = models.ForeignKey(
+        Profile,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="created_roomkeeping_assignments",
+    )
+    last_modified_by = models.ForeignKey(
+        Profile,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="modified_roomkeeping_assignments",
+    )
     date_created = models.DateTimeField(auto_now_add=True)
+    date_modified = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"{self.assigned_to} - {self.shift}"
@@ -318,13 +340,17 @@ class RoomState(BaseModel):
 
 class RoomStateTrans(BaseModel):
     # eg. used-to-assigned, assigned-to-cleaned, cleaned-to-IP, IP-to-used
-    from_state = models.ForeignKey(RoomState, on_delete=models.CASCADE)
-    to_state = models.ForeignKey(RoomState, on_delete=models.CASCADE)
+    initial_trans_state = models.ForeignKey(
+        RoomState, on_delete=models.CASCADE, related_name="initial_trans"
+    )
+    final_trans_state = models.ForeignKey(
+        RoomState, on_delete=models.CASCADE, related_name="final_trans"
+    )
     created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
     date_created = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.from_state} - {self.to_state}"
+        return f"{self.initial_trans_state} - {self.final_trans_state}"
 
     class Meta:
         db_table = "roomstatetrans"
@@ -345,11 +371,11 @@ class ProcessRoomKeeping(BaseModel):
     def __str__(self):
         # returns the final trans state of the room
         return f"{self.room} - {self.room_state_trans.to_state.name}"
-    
+
     class Meta:
         db_table = "processroomkeeping"
-        verbose_name="Room Keeping"
-        verbose_name_plural="Room Keepings"
+        verbose_name = "Room Keeping"
+        verbose_name_plural = "Room Keepings"
 
 
 class Booking(BaseModel):
