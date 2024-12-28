@@ -489,9 +489,9 @@ class RoomKeepingAssignSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         modified_by = self.context.get("modified_by")
-        instance.room = validated_data.get("room")
-        instance.assignment_date = validated_data.get("assignment_date")
-        instance.assigned_to = validated_data.get("assigned_to")
+        instance.room = validated_data.get("room", instance.room)
+        instance.assignment_date = validated_data.get("assignment_date", instance.assignment_date)
+        instance.assigned_to = validated_data.get("assigned_to", instance.assigned_to)
         instance.last_modified_by = modified_by
         instance.save()
         return instance

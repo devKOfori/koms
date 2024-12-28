@@ -252,7 +252,7 @@ class Amenity(BaseModel):
 class RoomType(BaseModel):
     name = models.CharField(max_length=255)
     room_category = models.ForeignKey(
-        RoomCategory, on_delete=models.SET_NULL, null=True
+        RoomCategory, on_delete=models.SET_NULL, null=True, related_name='room_types'
     )
     area_in_meters = models.DecimalField(max_digits=4, decimal_places=1, default=0.0)
     area_in_feet = models.DecimalField(max_digits=4, decimal_places=1, default=0.0)
@@ -276,7 +276,7 @@ class RoomType(BaseModel):
 class Room(BaseModel):
     room_number = models.CharField(max_length=255, db_index=True)
     floor = models.ForeignKey(HotelFloor, on_delete=models.SET_NULL, null=True)
-    room_type = models.ForeignKey(RoomType, on_delete=models.SET_NULL, null=True)
+    room_type = models.ForeignKey(RoomType, on_delete=models.SET_NULL, null=True, related_name='rooms')
     price_per_night = models.DecimalField(max_digits=6, decimal_places=2, default=0.00)
     is_occupied = models.BooleanField(default=False)
     created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)

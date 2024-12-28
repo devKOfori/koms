@@ -34,7 +34,7 @@ urlpatterns = [
     path(
         "house-keeping/assign/",
         views.RoomKeepingAssignCreate.as_view(),
-        name="assign_room_keeping",
+        name="assign_house_keeping",
     ),
     path(
         "house-keeping/<uuid:pk>/",
