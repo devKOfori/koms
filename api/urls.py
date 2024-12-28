@@ -4,7 +4,9 @@ from rest_framework.urlpatterns import format_suffix_patterns
 
 urlpatterns = [
     path("accounts/", views.ProfileList.as_view(), name="profile"),
-    path("accounts/<uuid:pk>/", views.ProfileDetail.as_view(), name="profile_detail"),
+    path(
+        "accounts/<uuid:pk>/", views.AccountChangeView.as_view(), name="change_profile"
+    ),
     path("accounts/register/", views.RegisterAccountView.as_view(), name="register"),
     path("accounts/logout/", views.LogoutView.as_view(), name="logout"),
     path(
@@ -17,15 +19,32 @@ urlpatterns = [
         views.PasswordResetView.as_view(),
         name="reset_password",
     ),
+    path("roles/", views.RoleList.as_view(), name="roles"),
+    path("departments/", views.DepartmentList.as_view(), name="departments"),
     path(
-        "roomkeeping/<uuid:pk>/",
+        "shift-management/",
+        views.ProfileShiftAssignCreateView.as_view(),
+        name="assign_shift",
+    ),
+    path(
+        "shift-management/<uuid:pk>/",
+        views.ProfileShiftAssignUpdateView.as_view(),
+        name="update_shift",
+    ),
+    path(
+        "house-keeping/assign/",
+        views.RoomKeepingAssignCreate.as_view(),
+        name="assign_room_keeping",
+    ),
+    path(
+        "house-keeping/<uuid:pk>/",
         views.RoomKeepingAssignUpdate.as_view(),
         name="edit_room_keeping_assign",
     ),
     path(
-        "assign-roomkeeping/",
-        views.RoomKeepingAssignCreate.as_view(),
-        name="assign_room_keeping",
-    ),
+        'house-keeping/process/',
+        views.ProcessRoomKeeping.as_view(),
+        name='process_roomkeeping'
+    )
 ]
 urlpatterns = format_suffix_patterns(urlpatterns)

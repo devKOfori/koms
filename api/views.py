@@ -24,6 +24,9 @@ class RegisterAccountView(generics.ListCreateAPIView):
         context["user_profile"] = user_profile
         return context
 
+class AccountChangeView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = models.Profile.objects.all()
+    serializer_class = api_serializers.CustomUserProfileSerializer
 
 class LogoutView(APIView):
     def post(self, request):
@@ -82,12 +85,57 @@ class ProfileList(generics.ListCreateAPIView):
     queryset = models.Profile.objects.all()
     serializer_class = api_serializers.CustomUserProfileSerializer
 
+
 class ProfileDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = models.Profile.objects.all()
     serializer_class = api_serializers.CustomUserProfileSerializer
-    lookup_url_kwarg = 'pk'
-    
-class RoomKeepingAssignCreate(generics.CreateAPIView):
+    lookup_url_kwarg = "pk"
+
+class RoleList(generics.ListCreateAPIView):
+    queryset = models.Role.objects.all()
+    serializer_class = api_serializers.RoleSerializer
+
+class DepartmentList(generics.ListCreateAPIView):
+    queryset = models.Department.objects.all()
+    serializer_class = api_serializers.DepartmentSerializer
+
+
+class CustomUpdateView(APIView):
+    def put(self, request, *args, **kwargs):
+        serializer = api_serializers.CustomUserProfileSerializer(data=request.data)
+        if serializer.is_valid():
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ProfileShiftAssignCreateView(generics.ListCreateAPIView):
+    queryset = models.ProfileShiftAssign.objects.all()
+    serializer_class = api_serializers.ProfileShiftAssignSerializer
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        try:
+            context["created_by"] = models.Profile.objects.get(user=self.request.user)
+            return context
+        except models.Profile.DoesNotExist:
+            raise serializers.ValidationError({"error": "user account has no profile"})
+
+class ProfileShiftAssignUpdateView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = models.ProfileShiftAssign.objects.all()
+    serializer_class = api_serializers.ProfileShiftAssignSerializer
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        try:
+            context["modified_by"] = models.Profile.objects.get(user=self.request.user)
+            return context
+        except models.Profile.DoesNotExist:
+            raise serializers.ValidationError({"error": "user account has no profile"})
+
+
+
+
+class RoomKeepingAssignCreate(generics.ListCreateAPIView):
     queryset = models.RoomKeepingAssign.objects.all()
     serializer_class = api_serializers.RoomKeepingAssignSerializer
 
@@ -95,11 +143,15 @@ class RoomKeepingAssignCreate(generics.CreateAPIView):
         try:
             profile = models.Profile.objects.get(user=self.request.user)
         except models.Profile.DoesNotExist:
-            return Response({"error": "user profile does not exist"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "user profile does not exist"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         context = super().get_serializer_context()
         context["created_by"] = profile
         return context
-    
+
+
 class RoomKeepingAssignUpdate(generics.UpdateAPIView):
     queryset = models.RoomKeepingAssign.objects.all()
     serializer_class = api_serializers.RoomKeepingAssignSerializer
@@ -108,7 +160,26 @@ class RoomKeepingAssignUpdate(generics.UpdateAPIView):
         try:
             profile = models.Profile.objects.get(user=self.request.user)
         except models.Profile.DoesNotExist:
-            return Response({"error": "user profile does not exist"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "user profile does not exist"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         context = super().get_serializer_context()
         context["modified_by"] = profile
+        return context
+
+class ProcessRoomKeeping(generics.CreateAPIView):
+    queryset = models.ProcessRoomKeeping.objects.all()
+    serializer_class=api_serializers.ProcessRoomKeepingSerializer
+
+    def get_serializer_context(self):
+        try:
+            profile = models.Profile.objects.get(user=self.request.user)
+        except models.Profile.DoesNotExist:
+            return Response(
+                {"error": "user profile does not exist"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        context = super().get_serializer_context()
+        context["authored_by"] = profile
         return context
