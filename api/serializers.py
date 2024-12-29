@@ -135,13 +135,6 @@ class GenderSerializer(serializers.ModelSerializer):
         read_only_fields = ["id"]
 
 
-# class DepartmentSerializer(serializers.ModelSerializer):
-#     class Meta:
-#         model = models.Department
-#         fields = ['id', 'name']
-#         read_only_fields = ['id']
-
-
 class CustomUserProfileSerializer(serializers.ModelSerializer):
     user = CustomUserSerializer()
 
@@ -482,15 +475,31 @@ class RoomKeepingAssignSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"error": f"The user has no {shift.name} on {assignment_date}"}
             )
-        instance = models.RoomKeepingAssign.objects.create(
-            **validated_data, created_by=created_by
-        )
+        with transaction.atomic():
+            instance = models.RoomKeepingAssign.objects.create(
+                **validated_data, created_by=created_by
+            )
+
+            # Create default processroomkeeping record
+            default_trans_state = models.HouseKeepingStateTrans.objects.get(
+                initial_trans_state__name__iexact="waiting",
+                final_trans_state__name__iexact="assigned",
+            )
+            models.ProcessRoomKeeping.objects.create(
+                room=instance.room,
+                room_keeping_assign=instance,
+                room_state_trans=default_trans_state,
+                date_processed=instance.date_created,
+                created_by=instance.created_by,
+            )
         return instance
 
     def update(self, instance, validated_data):
         modified_by = self.context.get("modified_by")
         instance.room = validated_data.get("room", instance.room)
-        instance.assignment_date = validated_data.get("assignment_date", instance.assignment_date)
+        instance.assignment_date = validated_data.get(
+            "assignment_date", instance.assignment_date
+        )
         instance.assigned_to = validated_data.get("assigned_to", instance.assigned_to)
         instance.last_modified_by = modified_by
         instance.save()
@@ -499,15 +508,17 @@ class RoomKeepingAssignSerializer(serializers.ModelSerializer):
 
 class ProcessRoomKeepingSerializer(serializers.ModelSerializer):
     room_state_trans = serializers.SlugRelatedField(
-        slug_field="final_trans_state",
+        slug_field="name",
         queryset=models.HouseKeepingStateTrans.objects.all(),
     )
-    shift = serializers.SlugRelatedField(
-        slug_field="name", queryset=models.Shift.objects.all()
-    )
-    room = serializers.SlugRelatedField(
-        slug_field="room_number", queryset=models.Room.objects.all()
-    )
+    shift = serializers.SlugRelatedField(slug_field="name", read_only=True)
+    # shift = serializers.SlugRelatedField(
+    #     slug_field="name", queryset=models.Shift.objects.all(), read_only=True
+    # )
+    room = serializers.SlugRelatedField(slug_field="room_number", read_only=True)
+    # room = serializers.SlugRelatedField(
+    #     slug_field="room_number", queryset=models.Room.objects.all(), read_only=True
+    # )
 
     class Meta:
         model = models.ProcessRoomKeeping
@@ -529,6 +540,18 @@ class ProcessRoomKeepingSerializer(serializers.ModelSerializer):
         ]
 
     def validate(self, attrs):
+        user_profile = self.context.get("authored_by")
+        if not helpers.check_profile_department(
+            profile=user_profile,
+            department_name=system_variables.DEPARTMENT_NAMES.get("house_keeping"),
+        ):
+            raise serializers.ValidationError(
+                {
+                    "error": "only staff of housekeeping department can complete this action"
+                }
+            )
+
+        # faulty rooms requires that notes are added
         room_state_trans = attrs.get("room_state_trans")
         final_trans_state = room_state_trans.final_trans_state
         if (
@@ -539,27 +562,345 @@ class ProcessRoomKeepingSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"error": "you are required to add some notes for faulty rooms"}
             )
+
+        # only supervisors can set IP state
+        # print(f'supervisor account? {helpers.check_profile_role(
+        #         profile=user_profile,
+        #         role_name=system_variables.ROLE_NAMES.get("supervisor"),
+        #     )}')
+        # print(f'User profile dept: {user_profile.roles.all()}')
+        if (
+            final_trans_state
+            and str(final_trans_state.name).casefold() == "ip"
+            and not helpers.check_profile_role(
+                profile=user_profile,
+                role_name=system_variables.ROLE_NAMES.get("supervisor"),
+            )
+        ):
+            raise serializers.ValidationError(
+                {"error": "only supervisors can set state to IP"}
+            )
+
+        # shift has not been assigned to you
+        room_keeping_assign = attrs.get("room_keeping_assign")
+        if user_profile != room_keeping_assign.assigned_to:
+            # print(f'assigned_to and user_profile {attrs.get('assigned_to')}  {user_profile}')
+            raise serializers.ValidationError(
+                {"error": "Task has not been assigned to you"}
+            )
         return attrs
 
     def create(self, validated_data):
         user_profile = self.context.get("authored_by")
-        if not helpers.check_profile_role(
-            profile=user_profile, role_name="Supervisor"
-        ) and helpers.check_profile_department(
-            profile=user_profile, department_name="house keeping"
-        ):
-            raise serializers.ValidationError(
-                {"error": "Only Supervisors for HouseKeeping department can complete this action"}
-            )
         room_keeping_assign = validated_data.get("room_keeping_assign")
         shift = room_keeping_assign.shift
-        room = room_keeping_assign.room
-        instance = models.ProcessRoomKeeping.objects.create(
-            room=room,
-            room_keeping_assign=room_keeping_assign,
-            room_state_trans=validated_data.get("room_state_trans"),
-            date_processed=validated_data.get("date_processed"),
-            shift=shift,
-            created_by=user_profile,
-        )
+        room: models.Room = room_keeping_assign.room
+        room_state_trans = validated_data.get("room_state_trans")
+        with transaction.atomic():
+            instance = models.ProcessRoomKeeping.objects.create(
+                room=room,
+                room_keeping_assign=room_keeping_assign,
+                room_state_trans=room_state_trans,
+                date_processed=validated_data.get("date_processed"),
+                shift=shift,
+                created_by=user_profile,
+            )
+            if room_state_trans.name == "cleaned-to-ip":
+                # print(f'room status before {room.room_status}')
+                # print('changing room status...')
+                room.change_room_maintenance_status("cleaned")
+                # print('room status changed...')
+                room.save()
+                # print(f'room status after {room.room_status}')
         return instance
+
+
+class NameTitleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.NameTitle
+        fields = ["name"]
+
+
+class ClientSerializer(serializers.ModelSerializer):
+    title = serializers.SlugRelatedField(
+        slug_field="name", queryset=models.NameTitle.objects.all()
+    )
+    gender = serializers.SlugRelatedField(
+        slug_field="name", queryset=models.Gender.objects.all()
+    )
+
+    class Meta:
+        model = models.Client
+        fields = [
+            "id",
+            "title",
+            "first_name",
+            "last_name",
+            "gender",
+            "email",
+            "phone_number",
+            "address",
+            "national_id",
+        ]
+        read_only_fields = ["id"]
+
+
+class PaymentTypeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.PaymentType
+        fields = ["id", "name"]
+        read_only_fields = ["id"]
+
+
+class SponsorTypeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.SponsorType
+        fields = ["id", "name", "allow_credit"]
+        read_only_fields = ["id"]
+
+
+class SponsorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.Sponsor
+        fields = ["id", "name", "email", "phone_number", "address", "fax"]
+        read_only_fields = ["id"]
+
+
+class BookingSerializer(serializers.ModelSerializer):
+    title = serializers.SlugRelatedField(
+        slug_field="name", queryset=models.NameTitle.objects.all()
+    )
+    room = serializers.SlugRelatedField(
+        slug_field="room_number", queryset=models.Room.objects.all()
+    )
+    receipt = serializers.SlugRelatedField(
+        slug_field="receipt_number",
+        queryset=models.Receipt.objects.all(),
+        allow_null=True,
+    )
+    gender = serializers.SlugRelatedField(
+        slug_field="name", queryset=models.Gender.objects.all()
+    )
+    sponsor_type=serializers.SlugRelatedField(slug_field='name', read_only=True)
+    class Meta:
+        model = models.Booking
+        exclude = [
+            "client",
+            "room_category",
+            "room_type",
+            "room_number",
+            "number_of_guests",
+            "payment_type",
+        ]
+        read_only_fields = ["id"]
+
+    def validate_room(self, room: models.Room):
+        """
+        Validate the room status for booking.
+
+        Parameters:
+        room: A Room instance.
+
+        Raises:
+        serializers.ValidationError: If the room's status is not 'cleaned'.
+
+        Returns:
+        the Room instance.
+
+        """
+        if room.room_maintenance_status != "cleaned":
+            raise serializers.ValidationError(
+                {
+                    "error": "the room is not cleaned and is currently not available for booking"
+                }
+            )
+
+        if room.room_booking_status == "booked":
+            raise serializers.ValidationError(
+                {"error": "the room currently has an active booking"}
+            )
+
+        return room
+
+    def validate(self, attrs):
+        check_in_date = attrs.get("check_in")
+        check_out_date = attrs.get("check_out")
+
+        # this condition prevents the creation of bookings where check-out date comes before check-in dates
+        if check_in_date >= check_out_date:
+            raise serializers.ValidationError(
+                {"error": "Check-out date must be later than check-in date."}
+            )
+
+        room_max_guests = attrs.get("room").max_guests
+
+        # this condition prevents the booking of rooms where the number of guests is greater than the room's max capacity
+        if (
+            attrs.get("number_of_older_guests", 0)
+            + attrs.get("number_of_younger_guests", 0)
+            > room_max_guests
+        ):
+            raise serializers.ValidationError(
+                {"error": f"room takes a max of {room_max_guests} guests"}
+            )
+
+        sponsor = attrs.get("sponsor")
+        receipt = attrs.get("receipt")
+        # validations related to self-sponsoring bookings
+        if sponsor and sponsor.sponsor_type.name.casefold() == "self":
+            # this condition ensures that receipts are added to bookings that have 'self' as sponsor type
+            if not receipt:
+                raise serializers.ValidationError(
+                    {"error": "Receipts are required for self-sponsored bookings."}
+                )
+
+            # this condition checks if the amount on a receipt can pay the cost of a booking
+            if not receipt.can_pay(attrs.get("rate")):
+                raise serializers.ValidationError(
+                    {
+                        "error": "the balance on the receipt cannot pay for the cost of the booking"
+                    }
+                )
+
+        return attrs
+
+    def create(self, validated_data: dict):
+        # get user profile
+        created_by = self.context["authored_by"]
+
+        # this condition prevents all users who are not in frontdesk department from creating bookings
+        if not helpers.check_profile_department(
+            profile=created_by, department_name="frontdesk"
+        ):
+            raise serializers.ValidationError(
+                {"error": "only frontdesk staff are authorized to complete this action"}
+            )
+
+        client_data = {}
+        client_data_keys = [
+            "title",
+            "first_name",
+            "last_name",
+            "gender",
+            "email",
+            "phone_number",
+            "address",
+            "national_id",
+            "emergency_contact_name",
+            "emergency_contact_email",
+        ]
+        for attr, value in validated_data.items():
+            if attr in client_data_keys:
+                client_data[attr] = value
+
+        with transaction.atomic():
+            # Create client account
+            client = models.Client.objects.create(**client_data)
+
+            # Room-related data
+            room: models.Room = validated_data.pop("room")
+            room_type = room.room_type
+            room_number = room.room_number
+
+            # Sponsor and payment related data
+            sponsor: models.Sponsor = validated_data.pop("sponsor")
+            sponsor_type: models.SponsorType = sponsor.sponsor_type
+            payment_type: models.PaymentType = (
+                models.PaymentType.objects.get(name__iexact="self")
+                if sponsor_type.name.casefold() == "self"
+                else models.PaymentType.objects.get(name__iexact="credit")
+            )
+
+            # booking-related data
+            number_of_guests = validated_data.get(
+                "number_of_older_guests"
+            ) + validated_data.get("number_of_older_guests")
+
+            booking = models.Booking.objects.create(
+                client=client,
+                room=room,
+                room_type=room_type,
+                room_number=room_number,
+                sponsor=sponsor,
+                sponsor_type=sponsor_type,
+                payment_type=payment_type,
+                number_of_guests=number_of_guests,
+                **validated_data,
+            )
+
+            # update 'room_booking_status' and 'room_maintenance_status'
+            room.change_room_booking_status("booked")
+            room.change_room_maintenance_status("used")
+            room.save()
+
+            # this condition, when true, updates the available amount field on a receipt
+            if booking.payment_type.name.casefold() == "self" and booking.receipt:
+                booking.receipt.pay(booking.rate)
+                booking.receipt.save()
+
+            return booking
+
+    def update(self, instance, validated_data):
+        # get user profile
+        modified_by = self.context["authored_by"]
+        client = instance.client
+
+        # this condition prevents all users who are not in frontdesk department from updating bookings
+        if not helpers.check_profile_department(
+            profile=modified_by, department_name="frontdesk"
+        ):
+            raise serializers.ValidationError(
+                {"error": "only frontdesk staff are authorized to complete this action"}
+            )
+
+        client_data = {}
+        client_data_keys = [
+            "title",
+            "first_name",
+            "last_name",
+            "gender",
+            "email",
+            "phone_number",
+            "address",
+            "national_id",
+            "emergency_contact_name",
+            "emergency_contact_email",
+        ]
+        for attr, value in validated_data.items():
+            if attr in client_data_keys:
+                setattr(client, attr, value)
+        with transaction.atomic():
+            client.save()
+            for attr, value in validated_data.items():
+                setattr(instance, attr, value)
+            instance.client=client
+
+            room: models.Room = validated_data.pop("room")
+            room_type = room.room_type
+            room_number = room.room_number
+
+            # Sponsor and payment related data
+            sponsor: models.Sponsor = validated_data.pop("sponsor")
+            sponsor_type: models.SponsorType = sponsor.sponsor_type
+            payment_type: models.PaymentType = (
+                models.PaymentType.objects.get(name__iexact="self")
+                if sponsor_type.name.casefold() == "self"
+                else models.PaymentType.objects.get(name__iexact="credit")
+            )
+
+            # booking-related data
+            number_of_guests = validated_data.get(
+                "number_of_older_guests"
+            ) + validated_data.get("number_of_older_guests")
+
+            instance.room = room or instance.room
+            instance.room_type = room_type or instance.room_type
+            instance.room_number = room_number or instance.room_number
+            instance.sponsor = sponsor or instance.sponsor
+            instance.sponsor_type = sponsor_type or instance.sponsor_type
+            instance.payment_type = payment_type or instance.payment_type
+            instance.number_of_guests = number_of_guests or instance.number_of_guests
+            instance.save()
+
+            return instance
+

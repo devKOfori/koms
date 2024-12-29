@@ -9,3 +9,12 @@ PASSWORD_RESET = {
     },
     "RESET_TOKEN_EXPIRY_DURATION": 2,
 }
+
+DEPARTMENT_NAMES ={
+    'general': 'general',
+    'house_keeping': 'house keeping',
+}
+
+ROLE_NAMES = {
+    'supervisor': 'Supervisor',
+}

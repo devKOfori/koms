@@ -42,9 +42,13 @@ urlpatterns = [
         name="edit_room_keeping_assign",
     ),
     path(
-        'house-keeping/process/',
+        "house-keeping/process/",
         views.ProcessRoomKeeping.as_view(),
-        name='process_roomkeeping'
-    )
+        name="process_roomkeeping",
+    ),
+    path("bookings/", views.BookingList.as_view(), name="bookings"),
+    path('bookings/extend/', views.BookingExtend.as_view(), name='extend_booking'),
+    path('bookings/<uuid:pk>/', views.BookingDetail.as_view(), name='booking_details'),
+    path('bookings/checkout/', views.BookingCheckout.as_view(), name='checkout_booking'),
 ]
 urlpatterns = format_suffix_patterns(urlpatterns)

@@ -1,7 +1,8 @@
 from api import models
 from rest_framework import serializers
 from django.contrib.auth.models import Group
-
+from django.apps import apps
+from django.db import transaction
 
 def check_profile_department(profile, department_name: str):
     try:
@@ -13,7 +14,7 @@ def check_profile_department(profile, department_name: str):
         )
 
 
-def check_profile_role(profile, role_name: str):
+def check_profile_role(profile, role_name: str) -> bool:
     if not profile:
         return False
     return models.ProfileRole.objects.filter(
@@ -90,5 +91,42 @@ def set_profile_roles(profile, roles_data:list) -> str:
         return "success"
     except models.Role.DoesNotExist:
         raise serializers.ValidationError({'error': 'One or more roles do not exist.'})
+    except Exception as e:
+        raise serializers.ValidationError({'error': f'an unexpected error occured: {str(e)}'})
+    
+def checkout_booking(booking, checked_out_by):
+    '''
+    Checks out a booking and updates the room status.
+    Args:
+        booking: A booking instance.
+        checked_out_by: A user profile instance.
+    Returns:
+        str: A success message if the operation succeeds.
+    Raises:
+        ValidationError: If any error occurs during the operation.
+    '''
+    try:
+        with transaction.atomic():
+            booking.checked_out = True
+            room = booking.room
+            room.room_booking_status = "empty"
+            room.room_maintenance_status = "used"
+            room.save()
+            booking.checked_out = True
+            booking.save()
+            Checkout = apps.get_model('api', 'Checkout')
+            Checkout.objects.create(
+                booking=booking,
+                room_number=room.room_number,
+                client=booking.client,
+                first_name=booking.first_name,
+                last_name=booking.last_name,
+                gender=booking.gender,
+                date_checked_in=booking.check_in,
+                date_checked_out=booking.check_out,
+                checked_out_by=checked_out_by,
+                checked_in_by=booking.created_by,
+            )
+        return "success"
     except Exception as e:
         raise serializers.ValidationError({'error': f'an unexpected error occured: {str(e)}'})

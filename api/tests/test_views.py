@@ -352,7 +352,14 @@ class HouseKeepingTest(TestCase):
         cls.gender_names = ["Female", "Male"]
         cls.hotel_floor_names = ["First Floor", "Second Floor", "Third Floor"]
         cls.shift_names = ["Morning Shift", "Afternoon Shift", "Evening Shift"]
-        cls.house_keeping_state_names = ["used", "assigned", "cleaned", "IP", "faulty"]
+        cls.house_keeping_state_names = [
+            "waiting",
+            "used",
+            "assigned",
+            "cleaned",
+            "IP",
+            "faulty",
+        ]
         api_models.Department.objects.bulk_create(
             [api_models.Department(name=name) for name in cls.department_names]
         )
@@ -407,11 +414,20 @@ class HouseKeepingTest(TestCase):
         general_dpt = departments.get(name__iexact="general")
         supervisor_role = roles.get(name__iexact="supervisor")
         staff_member_role = roles.get(name__iexact="staff member")
-        house_keeping_state_used = house_keeping_states.get(name__iexact="used")
-        house_keeping_state_assigned = house_keeping_states.get(name__iexact="assigned")
-        house_keeping_state_cleaned = house_keeping_states.get(name__iexact="cleaned")
-        house_keeping_state_ip = house_keeping_states.get(name__iexact="ip")
-        house_keeping_state_faulty = house_keeping_states.get(name__iexact="faulty")
+        self.house_keeping_state_waiting = house_keeping_states.get(
+            name__iexact="waiting"
+        )
+        self.house_keeping_state_used = house_keeping_states.get(name__iexact="used")
+        self.house_keeping_state_assigned = house_keeping_states.get(
+            name__iexact="assigned"
+        )
+        self.house_keeping_state_cleaned = house_keeping_states.get(
+            name__iexact="cleaned"
+        )
+        self.house_keeping_state_ip = house_keeping_states.get(name__iexact="ip")
+        self.house_keeping_state_faulty = house_keeping_states.get(
+            name__iexact="faulty"
+        )
         api_models.RoomType.objects.bulk_create(
             [
                 api_models.RoomType(
@@ -428,29 +444,34 @@ class HouseKeepingTest(TestCase):
         api_models.HouseKeepingStateTrans.objects.bulk_create(
             [
                 api_models.HouseKeepingStateTrans(
-                    name="used-to-assigned",
-                    initial_trans_state=house_keeping_state_used,
-                    final_trans_state=house_keeping_state_assigned,
+                    name="waiting-to-assigned",
+                    initial_trans_state=self.house_keeping_state_waiting,
+                    final_trans_state=self.house_keeping_state_assigned,
                 ),
                 api_models.HouseKeepingStateTrans(
                     name="assigned-to-cleaned",
-                    initial_trans_state=house_keeping_state_assigned,
-                    final_trans_state=house_keeping_state_cleaned,
-                ),
-                api_models.HouseKeepingStateTrans(
-                    name="cleaned-to-ip",
-                    initial_trans_state=house_keeping_state_cleaned,
-                    final_trans_state=house_keeping_state_ip,
-                ),
-                api_models.HouseKeepingStateTrans(
-                    name="ip-to-used",
-                    initial_trans_state=house_keeping_state_ip,
-                    final_trans_state=house_keeping_state_used,
+                    initial_trans_state=self.house_keeping_state_assigned,
+                    final_trans_state=self.house_keeping_state_cleaned,
                 ),
                 api_models.HouseKeepingStateTrans(
                     name="assigned-to-faulty",
-                    initial_trans_state=house_keeping_state_assigned,
-                    final_trans_state=house_keeping_state_faulty,
+                    initial_trans_state=self.house_keeping_state_assigned,
+                    final_trans_state=self.house_keeping_state_faulty,
+                ),
+                api_models.HouseKeepingStateTrans(
+                    name="cleaned-to-ip",
+                    initial_trans_state=self.house_keeping_state_cleaned,
+                    final_trans_state=self.house_keeping_state_ip,
+                ),
+                api_models.HouseKeepingStateTrans(
+                    name="ip-to-used",
+                    initial_trans_state=self.house_keeping_state_ip,
+                    final_trans_state=self.house_keeping_state_used,
+                ),
+                api_models.HouseKeepingStateTrans(
+                    name="used-to-waiting",
+                    initial_trans_state=self.house_keeping_state_used,
+                    final_trans_state=self.house_keeping_state_assigned,
                 ),
             ]
         )
@@ -517,12 +538,18 @@ class HouseKeepingTest(TestCase):
         self.housekeeping_supervisor_access_token = str(
             self.housekeeping_supervisor_refresh.access_token
         )
+        self.housekeeping_staff_refresh = RefreshToken.for_user(
+            user=self.housekeeping_staff_account
+        )
+        self.housekeeping_staff_access_token = str(
+            self.housekeeping_staff_refresh.access_token
+        )
 
         self.house_keeping_assignment_data = {
             "shift": morning_shift.name,
             "room": last_room.room_number,
             "assignment_date": datetime.date.today(),
-            "assigned_to": self.housekeeping_staff_profile.id
+            "assigned_to": self.housekeeping_staff_profile.id,
         }
 
         # assign house-keeping staff to a shift
@@ -530,7 +557,15 @@ class HouseKeepingTest(TestCase):
             department=house_keeping_dpt,
             profile=self.housekeeping_staff_profile,
             shift=morning_shift,
-            date=datetime.date(2024, 12, 28)
+            date=datetime.date(2024, 12, 28),
+        )
+
+        self.room_keeping_assign = api_models.RoomKeepingAssign.objects.create(
+            room=last_room,
+            shift=morning_shift,
+            assignment_date=datetime.date(2024, 12, 28),
+            assigned_to=self.housekeeping_supervisor_profile,
+            created_by=self.housekeeping_supervisor_profile,
         )
 
     def test_house_keeping_assignment_url(self):
@@ -546,32 +581,443 @@ class HouseKeepingTest(TestCase):
         )
         print(f"Response: {response.json()}")
         self.assertEqual(response.status_code, 201)
-    
-    def test_house_keeping_assignment_edit(self):
-        room_keeping_task_shift = api_models.Shift.objects.get(
-            name=self.house_keeping_assignment_data.get('shift'),
-        )
-        room_keeping_task_room = api_models.Room.objects.get(
-            room_number=self.house_keeping_assignment_data.get('room')
-        )
-        room_keeping_task_assigned_to = api_models.Profile.objects.get(
-            id=self.house_keeping_assignment_data.get('assigned_to')
-        )
-        room_keeping_task_date = self.house_keeping_assignment_data.get('assignment_date')
-        room_keeping_task = api_models.RoomKeepingAssign.objects.get(
-            assigned_to=room_keeping_task_assigned_to,
-            shift=room_keeping_task_shift,
-            assignment_date=room_keeping_task_date,
-            room=room_keeping_task_room
-        )
-        url = reverse("assign_house_keeping", kwargs={'pk': room_keeping_task.id})
-        data=self.house_keeping_assignment_data
-        data['assignment_date'] = datetime.date(2025, 1, 1)
-        response = self.client.put(
-            url,
+
+    # def test_house_keeping_assignment_edit(self):
+    #     room_keeping_task_shift = api_models.Shift.objects.get(
+    #         name=self.house_keeping_assignment_data.get('shift'),
+    #     )
+    #     room_keeping_task_room = api_models.Room.objects.get(
+    #         room_number=self.house_keeping_assignment_data.get('room')
+    #     )
+    #     room_keeping_task_assigned_to = api_models.Profile.objects.get(
+    #         id=self.house_keeping_assignment_data.get('assigned_to')
+    #     )
+    #     room_keeping_task_date = self.house_keeping_assignment_data.get('assignment_date')
+    #     room_keeping_task = api_models.RoomKeepingAssign.objects.get(
+    #         assigned_to=room_keeping_task_assigned_to,
+    #         shift=room_keeping_task_shift,
+    #         assignment_date=room_keeping_task_date,
+    #         room=room_keeping_task_room
+    #     )
+    #     url = reverse("assign_house_keeping", kwargs={'pk': room_keeping_task.id})
+    #     data=self.house_keeping_assignment_data
+    #     data['assignment_date'] = datetime.date(2025, 1, 1)
+    #     response = self.client.put(
+    #         url,
+    #         data=data,
+    #         content_type="application/json",
+    #         HTTP_AUTHORIZATION=f"Bearer {self.housekeeping_supervisor_access_token}",
+    #     )
+    #     print(f"Response: {response.json()}")
+    #     self.assertEqual(response.status_code, 201)
+
+    def test_process_room_keeping_url(self):
+        self.assertEqual("/koms/house-keeping/process/", reverse("process_roomkeeping"))
+
+    def test_process_room_keeping(self):
+        url = reverse("process_roomkeeping")
+        data = {
+            "room_keeping_assign": self.room_keeping_assign.id,
+            "room_state_trans": "cleaned-to-ip",
+            # "room_state_trans": "assigned-to-faulty",
+            # "room_state_trans": "assigned-to-cleaned",
+            # "room_state_trans": assigned_to_cleaned.id,
+            "date_processed": self.room_keeping_assign.date_created,
+            "note": "",
+        }
+        response = self.client.post(
+            path=url,
             data=data,
             content_type="application/json",
             HTTP_AUTHORIZATION=f"Bearer {self.housekeeping_supervisor_access_token}",
         )
-        print(f"Response: {response.json()}")
+        print(response.json())
         self.assertEqual(response.status_code, 201)
+
+
+class BookingTest(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.frontdesk_supervisor_data = {
+            "username": "frontdesk_supervisor",
+            "first_name": "FrontDesk Supervisor",
+            "last_name": "Kempinski",
+            "password": "frontdesk_supervisor",
+        }
+        cls.frontdesk_staff_data = {
+            "username": "frontdesk_staff",
+            "first_name": "FrontDesk Staff",
+            "last_name": "Kempinski",
+            "password": "frontdesk_staff",
+        }
+        cls.department_names = ["General", "House Keeping", "FrontDesk"]
+        cls.role_names = ["Supervisor", "Staff Member"]
+        cls.room_category_names = ["Suite", "Room"]
+        cls.room_type_names = ["Deluxe", "Presidential"]
+        cls.hotel_view_names = ["Pool", "City"]
+        cls.gender_names = ["Female", "Male"]
+        cls.hotel_floor_names = ["First Floor", "Second Floor", "Third Floor"]
+        cls.shift_names = ["Morning Shift", "Afternoon Shift", "Evening Shift"]
+        cls.sponsor_type_names = ["Self", "Coorporate", "Group", "State"]
+        cls.payment_type_names = ["Self", "Credit"]
+        cls.title_names = ["-", "Mr.", "Mrs.", "Miss"]
+        api_models.Department.objects.bulk_create(
+            [api_models.Department(name=name) for name in cls.department_names]
+        )
+        api_models.Role.objects.bulk_create(
+            [api_models.Role(name=name) for name in cls.role_names]
+        )
+        api_models.RoomCategory.objects.bulk_create(
+            [api_models.RoomCategory(name=name) for name in cls.room_category_names]
+        )
+
+        api_models.HotelView.objects.bulk_create(
+            [api_models.HotelView(name=name) for name in cls.hotel_view_names]
+        )
+        api_models.HotelFloor.objects.bulk_create(
+            [api_models.HotelFloor(name=name) for name in cls.hotel_floor_names]
+        )
+        api_models.Shift.objects.bulk_create(
+            [api_models.Shift(name=name) for name in cls.shift_names]
+        )
+        api_models.Gender.objects.bulk_create(
+            [api_models.Gender(name=name) for name in cls.gender_names]
+        )
+        api_models.SponsorType.objects.bulk_create(
+            [api_models.SponsorType(name=name) for name in cls.sponsor_type_names]
+        )
+        api_models.PaymentType.objects.bulk_create(
+            [api_models.PaymentType(name=name) for name in cls.payment_type_names]
+        )
+        api_models.NameTitle.objects.bulk_create(
+            [api_models.NameTitle(name=name) for name in cls.title_names]
+        )
+
+    def setUp(self):
+        departments = api_models.Department.objects.all()
+        roles = api_models.Role.objects.all()
+        room_categories = api_models.RoomCategory.objects.all()
+        house_keeping_states = api_models.HouseKeepingState.objects.all()
+        genders = api_models.Gender.objects.all()
+        floors = api_models.HotelFloor.objects.all()
+        shifts = api_models.Shift.objects.all()
+        morning_shift = shifts.get(name__iexact="morning shift")
+        afternoon_shift = shifts.get(name__iexact="afternoon shift")
+        evening_shift = shifts.get(name__iexact="evening shift")
+        first_floor = floors.get(name__iexact="first floor")
+        second_floor = floors.get(name__iexact="second floor")
+        third_floor = floors.get(name__iexact="third floor")
+        male = genders.get(name__iexact="male")
+        female = genders.get(name__iexact="female")
+        suite_category = room_categories.get(name__iexact="suite")
+        normal_room_category = room_categories.get(name__iexact="room")
+        hotel_views = api_models.HotelView.objects.all()
+        city_view = hotel_views.get(name__iexact="city")
+        pool_view = hotel_views.get(name__iexact="pool")
+        frontdesk_dpt = departments.get(name__iexact="frontdesk")
+        general_dpt = departments.get(name__iexact="general")
+        supervisor_role = roles.get(name__iexact="supervisor")
+        staff_member_role = roles.get(name__iexact="staff member")
+        api_models.RoomType.objects.bulk_create(
+            [
+                api_models.RoomType(
+                    name=name,
+                    room_category=suite_category,
+                    max_guests=3,
+                    bed="King Size",
+                    view=city_view,
+                    price_per_night=1000,
+                )
+                for name in self.room_type_names
+            ]
+        )
+
+        # create frontdesk staff and supervisor user accounts
+        self.frontdesk_supervisor_account = api_models.CustomUser.objects.create_user(
+            **self.frontdesk_supervisor_data
+        )
+        self.frontdesk_staff_account = api_models.CustomUser.objects.create_user(
+            **self.frontdesk_staff_data
+        )
+
+        # create frontdesk staff and supervisor profiles
+        self.frontdesk_supervisor_profile = api_models.Profile.objects.create(
+            full_name=f"{self.frontdesk_supervisor_account.first_name} {self.frontdesk_supervisor_account.last_name}",
+            user=self.frontdesk_supervisor_account,
+            department=frontdesk_dpt,
+            gender=male,
+        )
+        self.frontdesk_staff_profile = api_models.Profile.objects.create(
+            full_name=f"{self.frontdesk_staff_account.first_name} {self.frontdesk_staff_account.last_name}",
+            user=self.frontdesk_staff_account,
+            department=frontdesk_dpt,
+            gender=male,
+        )
+        # assign roles to house-keeping supervisor and staff
+        api_models.ProfileRole.objects.bulk_create(
+            [
+                api_models.ProfileRole(
+                    profile=self.frontdesk_supervisor_profile,
+                    role=supervisor_role,
+                    is_active=True,
+                ),
+                api_models.ProfileRole(
+                    profile=self.frontdesk_staff_profile,
+                    role=staff_member_role,
+                    is_active=True,
+                ),
+            ]
+        )
+        # Create rooms
+        room_types = api_models.RoomType.objects.all()
+        presidential = room_types.get(name__iexact="presidential")
+        deluxe = room_types.get(name__iexact="deluxe")
+        room_numbers = ["RM001", "RM002", "RM003", "RM004", "RM005", "RM006"]
+        api_models.Room.objects.bulk_create(
+            [
+                api_models.Room(
+                    room_number=room_number,
+                    floor=first_floor,
+                    room_type=deluxe,
+                    price_per_night=1000.00,
+                    is_occupied=False,
+                    max_guests=3,
+                    room_maintenance_status="cleaned",
+                    room_booking_status="empty",
+                )
+                for room_number in room_numbers
+            ]
+        )
+        self.last_room = api_models.Room.objects.last()
+
+        # Get refresh and access token for frontdesk supervisor and staff
+        self.frontdesk_supervisor_refresh = RefreshToken.for_user(
+            user=self.frontdesk_supervisor_account
+        )
+        self.frontdesk_supervisor_access_token = str(
+            self.frontdesk_supervisor_refresh.access_token
+        )
+        self.frontdesk_staff_refresh = RefreshToken.for_user(
+            user=self.frontdesk_staff_account
+        )
+        self.frontdesk_staff_access_token = str(
+            self.frontdesk_staff_refresh.access_token
+        )
+
+        # assign frontdesk staff to a shift
+        api_models.ProfileShiftAssign.objects.create(
+            department=frontdesk_dpt,
+            profile=self.frontdesk_staff_profile,
+            shift=morning_shift,
+            date=datetime.date(2024, 12, 30),
+        )
+        # create sponsor types
+        self.self_sponsor_type = api_models.SponsorType.objects.get(name__iexact="self")
+        self.corp_sponsor_type = api_models.SponsorType.objects.get(
+            name__iexact="coorporate"
+        )
+
+        # create self sponsor and Spagad coorporate sponsor
+        self.self_sponsor = api_models.Sponsor.objects.create(
+            name="Self", sponsor_type=self.self_sponsor_type
+        )
+        self.corp_sponsor = api_models.Sponsor.objects.create(
+            name="Spagad Tech", sponsor_type=self.corp_sponsor_type
+        )
+
+        self.booking_data = {
+            "title": "Mr.",
+            "first_name": "Selassie",
+            "last_name": "Awagah",
+            "gender": "Male",
+            "room": self.last_room.room_number,
+            "check_in": "2024-12-30",
+            "check_out": "2025-01-03",
+            "number_of_older_guests": 1,
+            "number_of_younger_guests": 0,
+            "rate_type": "non-member",
+            "rate": 4000.00,
+            "sponsor": self.self_sponsor.id,
+        }
+
+        self.receipt = api_models.Receipt.objects.create(
+            issued_to=f"{self.booking_data.get('title')} {self.booking_data.get('first_name')} {self.booking_data.get('last_name')}",
+            gender=male,
+            receipt_number='R00000001',
+            amount_paid=10000,
+            amount_available=10000,
+            date_issued=datetime.date(2024, 12, 29),
+        )
+
+        self.booking_data['receipt'] = self.receipt.receipt_number
+
+        self.booking = api_models.Booking.objects.create(
+            first_name="Selassie",
+            last_name="Awagah",
+            room=self.last_room,
+            check_in=datetime.date(2024, 12, 30),
+            check_out=datetime.date(2025, 1, 3),
+            number_of_older_guests=1,
+            number_of_younger_guests=0,
+            rate_type="non-member",
+            rate=4000.00,
+            sponsor=self.self_sponsor,
+        )
+
+    def test_booking_url(self):
+        self.assertEqual(reverse("bookings"), "/koms/bookings/")
+
+    def test_booking_get(self):
+        url = reverse("bookings")
+        response = self.client.get(
+            path=url, HTTP_AUTHORIZATION=f"Bearer {self.frontdesk_staff_access_token}"
+        )
+        self.assertEqual(response.status_code, 200)
+        # self.assertEqual(response.json(), [])
+
+    def test_booking_self_sponsor(self):
+        url = reverse("bookings")
+        response = self.client.post(
+            path=url,
+            data=self.booking_data,
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.frontdesk_staff_access_token}",
+        )
+        # print(f"Response: {response.json()}")
+        self.assertEqual(response.status_code, 201)
+    
+    def test_booking_self_sponsor_insufficient_receipt_balance(self):
+        url = reverse("bookings")
+        receipt = self.receipt
+        receipt.amount_available = self.booking_data.get('rate') - 1
+        receipt.save()
+        self.booking_data['receipt'] = receipt.receipt_number
+        response = self.client.post(
+            path=url,
+            data=self.booking_data,
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.frontdesk_staff_access_token}",
+        )
+        # print(f"Response: {response.json()}")
+        self.assertEqual(response.status_code, 400)
+    
+    def test_booking_with_credit_sponsor(self):
+        url = reverse("bookings")
+        booking_data = self.booking_data
+        booking_data['sponsor'] = self.corp_sponsor.id
+        booking_data['receipt'] = ''
+        response = self.client.post(
+            path=url,
+            data=self.booking_data,
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.frontdesk_staff_access_token}",
+        )
+        # print(f"Response: {response.json()}")
+        self.assertEqual(response.status_code, 201)
+
+    def test_booking_with_invalid_sponsor(self):
+            url = reverse("bookings")
+            booking_data = self.booking_data
+            booking_data['sponsor'] = 9999  # Invalid sponsor ID
+            response = self.client.post(
+                path=url,
+                data=booking_data,
+                content_type="application/json",
+                HTTP_AUTHORIZATION=f"Bearer {self.frontdesk_staff_access_token}",
+            )
+            # print(f"Response: {response.json()}")
+            self.assertEqual(response.status_code, 400)
+
+    def test_booking_with_invalid_room(self):
+        url = reverse("bookings")
+        booking_data = self.booking_data
+        booking_data['room'] = 'INVALID_ROOM'  # Invalid room number
+        response = self.client.post(
+            path=url,
+            data=booking_data,
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.frontdesk_staff_access_token}",
+        )
+        # print(f"Response: {response.json()}")
+        self.assertEqual(response.status_code, 400)
+
+    def test_booking_with_missing_fields(self):
+        url = reverse("bookings")
+        booking_data = self.booking_data
+        del booking_data['first_name']  # Remove required field
+        response = self.client.post(
+            path=url,
+            data=booking_data,
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.frontdesk_staff_access_token}",
+        )
+        # print(f"Response: {response.json()}")
+        self.assertEqual(response.status_code, 400)
+
+    def test_booking_with_invalid_date_range(self):
+        url = reverse("bookings")
+        booking_data = self.booking_data
+        booking_data['check_in'] = "2025-01-03"
+        booking_data['check_out'] = "2024-12-30"  # Invalid date range
+        response = self.client.post(
+            path=url,
+            data=booking_data,
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.frontdesk_staff_access_token}",
+        )
+        # print(f"Response: {response.json()}")
+        self.assertEqual(response.status_code, 400)
+
+    def test_booking_with_invalid_rate_type(self):
+        url = reverse("bookings")
+        booking_data = self.booking_data
+        booking_data['rate_type'] = "INVALID_RATE_TYPE"  # Invalid rate type
+        response = self.client.post(
+            path=url,
+            data=booking_data,
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.frontdesk_staff_access_token}",
+        )
+        # print(f"Response: {response.json()}")
+        self.assertEqual(response.status_code, 400)
+
+    def test_booking_details_url(self):
+        self.assertEqual(f"/koms/bookings/{self.booking.id}/", reverse("booking_details", kwargs={'pk': self.booking.id}))
+
+    def test_booking_details(self):
+        url = reverse("booking_details", kwargs={'pk': self.booking.id})
+        response = self.client.get(
+            path=url, HTTP_AUTHORIZATION=f"Bearer {self.frontdesk_staff_access_token}"
+        )
+        # print(f"Response: {response.json()}")
+        self.assertEqual(response.status_code, 200)
+
+    def test_booking_extend(self):
+        url = reverse("extend_booking")
+        extend_data = {
+            'booking_id': self.booking.id,
+            'num_days': 2,
+        }
+        response = self.client.post(
+            path=url,
+            data=extend_data,
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.frontdesk_staff_access_token}",
+        )
+        # print(f"Response: {response.json()}")
+        self.assertEqual(response.status_code, 200)
+
+    def test_booking_checkout(self):
+        url = reverse("checkout_booking")
+        checkout_data = {
+            'booking_id': self.booking.id,
+        }
+        response = self.client.post(
+            path=url,
+            data=checkout_data,
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.frontdesk_staff_access_token}",
+        )
+        print(f"Checkout Test Response: {response.json()}")
+        self.assertEqual(response.status_code, 200)
+

@@ -6,6 +6,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from . import serializers as api_serializers
 from . import models
+from utils import helpers
 
 
 # Create your views here.
@@ -49,7 +50,6 @@ class LogoutView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-
 class PasswordChangeView(APIView):
     def post(self, request):
         try:
@@ -75,16 +75,13 @@ class PasswordChangeView(APIView):
                 {"error": "user account not found"}, status=status.HTTP_400_BAD_REQUEST
             )
 
-
 class PasswordResetView(generics.CreateAPIView):
     queryset = models.PasswordReset.objects.all()
     serializer_class = api_serializers.PasswordResetSerializer
 
-
 class ProfileList(generics.ListCreateAPIView):
     queryset = models.Profile.objects.all()
     serializer_class = api_serializers.CustomUserProfileSerializer
-
 
 class ProfileDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = models.Profile.objects.all()
@@ -99,14 +96,12 @@ class DepartmentList(generics.ListCreateAPIView):
     queryset = models.Department.objects.all()
     serializer_class = api_serializers.DepartmentSerializer
 
-
 class CustomUpdateView(APIView):
     def put(self, request, *args, **kwargs):
         serializer = api_serializers.CustomUserProfileSerializer(data=request.data)
         if serializer.is_valid():
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 class ProfileShiftAssignCreateView(generics.ListCreateAPIView):
     queryset = models.ProfileShiftAssign.objects.all()
@@ -132,9 +127,6 @@ class ProfileShiftAssignUpdateView(generics.RetrieveUpdateDestroyAPIView):
         except models.Profile.DoesNotExist:
             raise serializers.ValidationError({"error": "user account has no profile"})
 
-
-
-
 class RoomKeepingAssignCreate(generics.ListCreateAPIView):
     queryset = models.RoomKeepingAssign.objects.all()
     serializer_class = api_serializers.RoomKeepingAssignSerializer
@@ -150,7 +142,6 @@ class RoomKeepingAssignCreate(generics.ListCreateAPIView):
         context = super().get_serializer_context()
         context["created_by"] = profile
         return context
-
 
 class RoomKeepingAssignUpdate(generics.UpdateAPIView):
     queryset = models.RoomKeepingAssign.objects.all()
@@ -183,3 +174,89 @@ class ProcessRoomKeeping(generics.CreateAPIView):
         context = super().get_serializer_context()
         context["authored_by"] = profile
         return context
+    
+class BookingList(generics.ListCreateAPIView):
+    queryset=models.Booking.objects.all()
+    serializer_class=api_serializers.BookingSerializer
+
+    def get_serializer_context(self):
+        try:
+            profile = models.Profile.objects.get(user=self.request.user)
+        except models.Profile.DoesNotExist:
+            return Response(
+                {"error": "user profile does not exist"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        context = super().get_serializer_context()
+        context["authored_by"] = profile
+        return context
+
+class BookingExtend(APIView):
+    def post(self, request):
+        booking_id = request.data.get("booking_id")
+        num_days = request.data.get("num_days")
+        if not booking_id:
+            return Response(
+                {"error": "booking id is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            booking = models.Booking.objects.get(id=booking_id)
+        except models.Booking.DoesNotExist:
+            return Response(
+                {"error": "booking not found"}, status=status.HTTP_400_BAD_REQUEST
+            )
+        booking.extend_booking(num_days=num_days)
+        booking.save()
+        return Response(
+            {"detail": "booking extended successfully"}, status=status.HTTP_200_OK
+        )
+    
+class BookingDetail(generics.RetrieveUpdateDestroyAPIView):
+    queryset=models.Booking.objects.all()
+    serializer_class=api_serializers.BookingSerializer
+    lookup_url_kwarg="pk"
+
+    def get_serializer_context(self):
+        try:
+            profile = models.Profile.objects.get(user=self.request.user)
+        except models.Profile.DoesNotExist:
+            return Response(
+                {"error": "user profile does not exist"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        context = super().get_serializer_context()
+        context["authored_by"] = profile
+        return context
+    
+
+class BookingCheckout(APIView):
+    def post(self, request):
+        booking_id = request.data.get("booking_id")
+        if not booking_id:
+            return Response(
+                {"error": "booking id is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            checked_out_by = models.Profile.objects.get(user=request.user)
+        except models.Profile.DoesNotExist:
+            return Response(
+                {"error": "user profile does not exist"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            booking = models.Booking.objects.get(id=booking_id)
+        except models.Booking.DoesNotExist:
+            return Response(
+                {"error": "booking not found"}, status=status.HTTP_400_BAD_REQUEST
+            )
+        checkout_response=helpers.checkout_booking(booking, checked_out_by)
+        if checkout_response.casefold() == "success":
+            return Response(
+                {"detail": "booking checked out successfully"}, status=status.HTTP_200_OK
+            )
+        return Response(
+            {"error": "an error occured while checking out the booking"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )

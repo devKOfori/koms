@@ -7,8 +7,15 @@ import uuid, datetime
 from . import managers
 from django.conf import settings
 from utils.system_variables import PASSWORD_RESET
+from utils import defaults, choices
+from typing import Literal, Optional
+from rest_framework import serializers
 
 # Create your models here.
+
+
+# Module defaults
+# ROOM_STATUS_DEFAULT = defaults.get_table_default("roomstatus")
 
 
 class BaseModel(models.Model):
@@ -66,9 +73,6 @@ class CustomUser(AbstractBaseUser, BaseModel, PermissionsMixin):
         verbose_name_plural = "Users"
 
 
-PASSWORD_RESET_CHANNEL_CHOICES = [("email", "Email"), ("sms", "SMS")]
-
-
 class PasswordReset(BaseModel):
     username = models.CharField(max_length=255)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
@@ -76,7 +80,7 @@ class PasswordReset(BaseModel):
     date_created = models.DateTimeField(auto_now_add=True)
     is_used = models.BooleanField(default=False)
     reset_channel = models.CharField(
-        max_length=30, choices=PASSWORD_RESET_CHANNEL_CHOICES
+        max_length=30, choices=choices.PASSWORD_RESET_CHANNEL_CHOICES
     )
     expiry_date = models.DateTimeField(default=timezone.now)
 
@@ -252,7 +256,7 @@ class Amenity(BaseModel):
 class RoomType(BaseModel):
     name = models.CharField(max_length=255)
     room_category = models.ForeignKey(
-        RoomCategory, on_delete=models.SET_NULL, null=True, related_name='room_types'
+        RoomCategory, on_delete=models.SET_NULL, null=True, related_name="room_types"
     )
     area_in_meters = models.DecimalField(max_digits=4, decimal_places=1, default=0.0)
     area_in_feet = models.DecimalField(max_digits=4, decimal_places=1, default=0.0)
@@ -276,14 +280,67 @@ class RoomType(BaseModel):
 class Room(BaseModel):
     room_number = models.CharField(max_length=255, db_index=True)
     floor = models.ForeignKey(HotelFloor, on_delete=models.SET_NULL, null=True)
-    room_type = models.ForeignKey(RoomType, on_delete=models.SET_NULL, null=True, related_name='rooms')
+    room_type = models.ForeignKey(
+        RoomType, on_delete=models.SET_NULL, null=True, related_name="rooms"
+    )
     price_per_night = models.DecimalField(max_digits=6, decimal_places=2, default=0.00)
+    max_guests = models.PositiveIntegerField(default=1, null=True)
     is_occupied = models.BooleanField(default=False)
     created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
     date_created = models.DateTimeField(auto_now_add=True)
+    # room_status = models.ForeignKey(
+    #     "RoomStatus",
+    #     on_delete=models.SET_DEFAULT,
+    #     default=ROOM_STATUS_DEFAULT,
+    # )
+    room_maintenance_status = models.CharField(
+        max_length=255,
+        choices=choices.ROOM_MAINTENANCE_STATUS_CHOICES,
+        default="default",
+    )
+    room_booking_status = models.CharField(
+        max_length=255, choices=choices.ROOM_BOOKING_STATUS_CHOICES, default="default"
+    )
 
     def __str__(self):
         return self.room_number
+
+    def change_room_maintenance_status(
+        self, status: Literal["cleaned", "used", "broken"]
+    ):
+        """
+        Change the status of the room.
+
+        Parameters:
+        status (Literal["cleaned", "used", "broken"]): The new status of the room.
+            Must be one of the following values:
+            - "cleaned": Indicates that the room has been cleaned.
+            - "used": Indicates that the room is currently in use.
+            - "broken": Indicates that the room is broken and needs maintenance.
+
+        Returns:
+        None
+        """
+        self.room_status = status
+
+    def change_room_booking_status(self, status: Literal["booked", "empty"]):
+        """
+        Change the booking status of the room.
+
+        Parameters:
+        status (Literal['booked', 'empty']): The new booking status of the room.
+            Must be one of the following values:
+            - 'booked': Indicates that the room is currently booked.
+            - 'empty': Indicates that the room is currently empty.
+
+        Returns:
+        None
+
+        Example:
+        change_room_booking_status('booked')
+        Sets the room_booking_status to 'booked'.
+        """
+        self.room_booking_status = status
 
     class Meta:
         db_table = "room"
@@ -336,7 +393,10 @@ class RoomKeepingAssign(BaseModel):
 
 
 class HouseKeepingState(BaseModel):
-    # eg. used, assigned, cleaned, IP, faulty
+    # eg. waiting, used, assigned, cleaned, IP, faulty
+    # when assignments are first created, the have the waiting-to-assigned state
+    # when a user is checked in, the room state changes to ip-to-used
+    # after checkout, the room state changes to used-to-waiting
     name = models.CharField(max_length=255)
 
     def __str__(self):
@@ -349,15 +409,15 @@ class HouseKeepingState(BaseModel):
 
 
 class HouseKeepingStateTrans(BaseModel):
-    # eg. used-to-assigned, assigned-to-cleaned, cleaned-to-IP, IP-to-used, assigned_to_faulty
-    name=models.CharField(max_length=255)
+    # eg. waiting-to-assigned, used-to-waiting, assigned-to-cleaned, cleaned-to-IP, IP-to-used, assigned_to_faulty
+    name = models.CharField(max_length=255, db_index=True)
     initial_trans_state = models.ForeignKey(
         HouseKeepingState, on_delete=models.CASCADE, related_name="initial_trans"
     )
     final_trans_state = models.ForeignKey(
         HouseKeepingState, on_delete=models.CASCADE, related_name="final_trans"
     )
-    note=models.CharField(max_length=255, blank=True, null=True)
+    note = models.CharField(max_length=255, blank=True, null=True)
     created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
     date_created = models.DateTimeField(auto_now_add=True)
 
@@ -380,10 +440,11 @@ class ProcessRoomKeeping(BaseModel):
     shift = models.ForeignKey(Shift, on_delete=models.SET_NULL, null=True)
     created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
     date_created = models.DateTimeField(auto_now_add=True)
+    note = models.CharField(max_length=255, blank=True, null=True)
 
     def __str__(self):
         # returns the final trans state of the room
-        return f"{self.room} - {self.room_state_trans.to_state.name}"
+        return f"{self.room} - {self.room_state_trans.final_trans_state.name}"
 
     class Meta:
         db_table = "processroomkeeping"
@@ -391,14 +452,248 @@ class ProcessRoomKeeping(BaseModel):
         verbose_name_plural = "Room Keepings"
 
 
+class NameTitle(BaseModel):
+    name = models.CharField(max_length=255)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = "nametitle"
+        verbose_name = "Title"
+        verbose_name_plural = "Titles"
+
+
+class Client(BaseModel):
+    title = models.ForeignKey(
+        NameTitle, on_delete=models.SET_NULL, null=True, blank=True
+    )
+    first_name = models.CharField(max_length=255)
+    last_name = models.CharField(max_length=255)
+    gender = models.ForeignKey(Gender, on_delete=models.SET_NULL, null=True, blank=True)
+    # gender = models.CharField(max_length=255, choices=choices.GENDER_CHOICES)
+    email = models.EmailField(max_length=255, blank=True, null=True)
+    phone_number = models.CharField(max_length=20, blank=True, null=True)
+    address = models.CharField(max_length=255, blank=True, null=True)
+    national_id = models.CharField(max_length=255, blank=True, null=True)
+    emergency_contact_name = models.CharField(max_length=255, blank=True, null=True)
+    emergency_contact_phone = models.CharField(max_length=255, blank=True, null=True)
+
+    def __str__(self):
+        return (
+            f"{self.title} {self.first_name} {self.last_name}"
+            if self.title
+            else f"{self.first_name} {self.last_name}"
+        )
+
+    class Meta:
+        db_table = "client"
+
+
+# DEFAULT_PAYMENT_TYPE = defaults.get_table_default('paymenttype')
+class PaymentType(BaseModel):
+    # eg. cash, credit
+    name = models.CharField(max_length=255)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = "paymenttype"
+        verbose_name = "Payment Type"
+        verbose_name_plural = "Payment Types"
+
+
+class SponsorType(BaseModel):
+    # eg. self, corp, group
+    name = models.CharField(max_length=255)
+    allow_credit = models.BooleanField(default=False)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = "sponsortype"
+        verbose_name = "Sponsor Type"
+        verbose_name_plural = "Sponsor Types"
+
+
+class Sponsor(BaseModel):
+    name = models.CharField(max_length=255)
+    email = models.EmailField(blank=True, null=True)
+    phone_number = models.CharField(blank=True, null=True)
+    address = models.CharField(max_length=255, blank=True, null=True)
+    fax = models.CharField(max_length=255, blank=True, null=True)
+    sponsor_type = models.ForeignKey(SponsorType, on_delete=models.SET_NULL, null=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = "sponsor"
+
+
+class PaymentMethod(BaseModel):
+    name = models.CharField(max_length=255)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = "paymentmethod"
+        verbose_name = "Payment Method"
+        verbose_name_plural = "Payment Methods"
+
+
+class Receipt(BaseModel):
+    issued_to = models.CharField(max_length=255)
+    gender = models.ForeignKey(Gender, on_delete=models.SET_NULL, null=True)
+    receipt_number = models.CharField(max_length=255, db_index=True)
+    amount_paid = models.DecimalField(max_digits=11, decimal_places=2, default=0.00)
+    amount_available = models.DecimalField(
+        max_digits=11, decimal_places=2, default=0.00
+    )
+    date_issued = models.DateTimeField(auto_now_add=True)
+    issued_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
+    payment_method = models.ForeignKey(
+        PaymentMethod, on_delete=models.SET_NULL, null=True
+    )
+    transaction_id = models.CharField(max_length=255, blank=True, null=True)
+    note = models.CharField(max_length=255, blank=True, null=True)
+    receipt_status = models.CharField(
+        max_length=255, choices=choices.RECEIPT_STATUS_CHOICES
+    )
+
+    def __str__(self):
+        return self.receipt_number
+
+    def can_pay(self, amount: float) -> bool:
+        return self.amount_available >= amount
+
+    def pay(self, amount: float):
+        if not self.amount_available >= amount:
+            raise serializers.ValidationError(
+                {"error": "available balance on receipt is less than amount to be paid"}
+            )
+        self.amount_available -= amount
+
+
 class Booking(BaseModel):
-    check_in = models.DateField(default=timezone.now)
-    check_out = models.DateField(default=timezone.now)
+    # Client-related fields
+    client = models.ForeignKey(Client, on_delete=models.SET_NULL, null=True, blank=True)
+    title = models.ForeignKey(
+        NameTitle, on_delete=models.SET_NULL, null=True, blank=True
+    )
+    first_name = models.CharField(max_length=255)
+    last_name = models.CharField(max_length=255)
+    # gender = models.CharField(max_length=255, choices=choices.GENDER_CHOICES)
+    gender = models.ForeignKey(Gender, on_delete=models.SET_NULL, null=True, blank=True)
+    email = models.EmailField(max_length=255, blank=True, null=True)
+    phone_number = models.CharField(max_length=20, blank=True, null=True)
+    address = models.CharField(max_length=255, blank=True, null=True)
+    employee_id = models.CharField(max_length=255, blank=True, null=True)
+    group_id = models.CharField(max_length=255, blank=True, null=True)
+    national_id = models.CharField(max_length=255, blank=True, null=True)
+    emergency_contact_name = models.CharField(max_length=255, blank=True, null=True)
+    emergency_contact_phone = models.CharField(max_length=255, blank=True, null=True)
+
+    # Room-related fields
     room_category = models.ForeignKey(
         RoomCategory, on_delete=models.SET_NULL, null=True
     )
     room_type = models.ForeignKey(RoomType, on_delete=models.SET_NULL, null=True)
     room = models.ForeignKey(Room, on_delete=models.SET_NULL, null=True)
+    room_number = models.CharField(max_length=255, blank=True, null=True, db_index=True)
 
+    # Booking-related fields
+    booking_code = models.CharField(
+        max_length=255, blank=True, null=True
+    )  # this field is used in authenticating client complaints and requests
+    check_in = models.DateTimeField(default=timezone.now)
+    check_out = models.DateTimeField(default=timezone.now)
+    number_of_guests = models.PositiveIntegerField(default=1)
+    number_of_older_guests = models.PositiveIntegerField(default=1)
+    number_of_younger_guests = models.PositiveIntegerField(default=0)
+    rate_type = models.CharField(
+        max_length=255, choices=choices.RATE_TYPE_CHOICES, default="non-member"
+    )
+    rate = models.DecimalField(max_digits=11, decimal_places=2, default=0.00)
+    promo_code = models.CharField(max_length=255, blank=True, null=True)
+
+    # Sponsor and payment information
+    sponsor_type = models.ForeignKey(
+        SponsorType, on_delete=models.SET_NULL, null=True, blank=True
+    )
+    sponsor = models.ForeignKey(Sponsor, on_delete=models.SET_NULL, null=True)
+    payment_type = models.ForeignKey(
+        PaymentType, on_delete=models.SET_NULL, null=True, blank=True
+    )
+    receipt = models.ForeignKey(
+        Receipt, on_delete=models.SET_NULL, null=True, blank=True
+    )
+
+    date_created = models.DateTimeField(default=timezone.now, blank=True, null=True)
+    date_modified = models.DateTimeField(default=timezone.now, blank=True, null=True)
+    created_by = models.ForeignKey(
+        Profile,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="bookings_created",
+    )
+    modified_by = models.ForeignKey(
+        Profile,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="bookings_modified",
+    )
+    checked_out=models.BooleanField(default=False)
+    def __str__(self):
+        return
+
+    def extend_booking(self, num_days: datetime.datetime):
+        """
+        Extend the booking by num_days.
+        Parameters:
+        num_days (int): The number of days to extend the booking by.
+        Returns:
+        None
+        """
+        self.check_out = self.check_out + datetime.timedelta(days=num_days)
+
+    
+    def checkout(self):
+        """
+        Check out the client from the room.
+        Parameters:
+        None
+        Returns:
+        None
+        """
+        self.check_out = timezone.now()
+
+    
     class Meta:
         db_table = "booking"
+
+class Checkout(BaseModel):
+    booking = models.OneToOneField(Booking, on_delete=models.CASCADE, related_name="checkout")
+    client = models.ForeignKey(Client, on_delete=models.SET_NULL, null=True)
+    room_number = models.CharField(max_length=255, blank=True, null=True)
+    first_name = models.CharField(max_length=255)
+    last_name = models.CharField(max_length=255)
+    gender= models.ForeignKey(Gender, on_delete=models.SET_NULL, null=True)
+    date_checked_in = models.DateTimeField(default=timezone.now)
+    date_checked_out = models.DateTimeField(default=timezone.now)
+    checked_out_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True, related_name="checkouts")
+    checked_in_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True, related_name="checkins")
+    date_created = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.booking} - {self.client}"
+
+    class Meta:
+        db_table = "checkout"
+        verbose_name = "Checkout"
+        verbose_name_plural = "Checkouts"
