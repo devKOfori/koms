@@ -6,7 +6,7 @@ from django.utils import timezone
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from datetime import timedelta, date, datetime
-from utils import generators, system_variables, notifications, helpers
+from utils import generators, system_variables, notifications, helpers, choices
 
 
 class CustomUserSerializer(serializers.ModelSerializer):
@@ -681,7 +681,8 @@ class BookingSerializer(serializers.ModelSerializer):
     gender = serializers.SlugRelatedField(
         slug_field="name", queryset=models.Gender.objects.all()
     )
-    sponsor_type=serializers.SlugRelatedField(slug_field='name', read_only=True)
+    sponsor_type = serializers.SlugRelatedField(slug_field="name", read_only=True)
+
     class Meta:
         model = models.Booking
         exclude = [
@@ -873,7 +874,7 @@ class BookingSerializer(serializers.ModelSerializer):
             client.save()
             for attr, value in validated_data.items():
                 setattr(instance, attr, value)
-            instance.client=client
+            instance.client = client
 
             room: models.Room = validated_data.pop("room")
             room_type = room.room_type
@@ -904,3 +905,347 @@ class BookingSerializer(serializers.ModelSerializer):
 
             return instance
 
+
+class AmenitySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.Amenity
+        fields = ["id", "name"]
+        read_only_fields = ["id"]
+
+    def create(self, validated_data):
+        created_by = self.context.get("authored_by")
+        if not helpers.check_profile_department(
+            profile=created_by, department_name="house keeping"
+        ):
+            raise serializers.ValidationError(
+                {
+                    "error": "only house keeping staff are authorized to complete this action"
+                }
+            )
+        if not helpers.check_profile_role(profile=created_by, role_name="Supervisor"):
+            raise serializers.ValidationError(
+                {
+                    "error": "only supervisors in house keeping are authorized to complete this action"
+                }
+            )
+        return models.Amenity.objects.create(created_by=created_by, **validated_data)
+
+
+class RoomCategorySerializer(serializers.ModelSerializer):
+    amenities = serializers.SlugRelatedField(
+        slug_field="name", many=True, queryset=models.Amenity.objects.all()
+    )
+
+    class Meta:
+        model = models.RoomCategory
+        fields = ["id", "name", "amenities"]
+        read_only_fields = ["id"]
+
+    def create(self, validated_data):
+        created_by = self.context.get("authored_by")
+        if not helpers.check_profile_department(
+            profile=created_by, department_name="house keeping"
+        ):
+            raise serializers.ValidationError(
+                {
+                    "error": "only house keeping staff are authorized to complete this action"
+                }
+            )
+        if not helpers.check_profile_role(profile=created_by, role_name="Supervisor"):
+            raise serializers.ValidationError(
+                {
+                    "error": "only supervisors in house keeping are authorized to complete this action"
+                }
+            )
+        amenities = validated_data.pop("amenities")
+        room_category = models.RoomCategory.objects.create(
+            created_by=created_by, **validated_data
+        )
+        room_category.amenities.set(amenities)
+        return room_category
+
+    def update(self, instance, validated_data):
+        modified_by = self.context.get("authored_by")
+        if not helpers.check_profile_department(
+            profile=modified_by, department_name="house keeping"
+        ):
+            raise serializers.ValidationError(
+                {
+                    "error": "only house keeping staff are authorized to complete this action"
+                }
+            )
+        if not helpers.check_profile_role(profile=modified_by, role_name="Supervisor"):
+            raise serializers.ValidationError(
+                {
+                    "error": "only supervisors in house keeping are authorized to complete this action"
+                }
+            )
+        amenities = validated_data.pop("amenities")
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        instance.amenities.set(amenities)
+        return instance
+
+
+class RoomTypeSerializer(serializers.ModelSerializer):
+    room_category = serializers.SlugRelatedField(
+        slug_field="name", queryset=models.RoomCategory.objects.all()
+    )
+    amenities = serializers.SlugRelatedField(
+        slug_field="name",
+        many=True,
+        queryset=models.Amenity.objects.all(),
+        allow_null=True,
+    )
+    view = serializers.SlugRelatedField(
+        slug_field="name", queryset=models.HotelView.objects.all()
+    )
+    bed_types = serializers.SlugRelatedField(
+        slug_field="name", queryset=models.BedType.objects.all(), many=True
+    )
+
+    class Meta:
+        model = models.RoomType
+        fields = [
+            "id",
+            "name",
+            "amenities",
+            "room_category",
+            "area_in_meters",
+            "area_in_feet",
+            "bed_types",
+            "rate",
+            "view",
+            "max_guests",
+            "bed_types",
+        ]
+        read_only_fields = ["id"]
+
+    def create(self, validated_data):
+        created_by = self.context.get("authored_by")
+        room_category = validated_data.get("room_category")
+        if not helpers.check_profile_department(
+            profile=created_by, department_name="house keeping"
+        ):
+            raise serializers.ValidationError(
+                {
+                    "error": "only house keeping staff are authorized to complete this action"
+                }
+            )
+        amenities = validated_data.pop("amenities")
+        bed_types = validated_data.pop("bed_types")
+        if not amenities:
+            amenities = room_category.amenities.all()
+
+        room_type = models.RoomType.objects.create(
+            created_by=created_by, **validated_data
+        )
+        room_type.amenities.set(amenities)
+        room_type.bed_types.set(bed_types)
+        return room_type
+
+    def update(self, instance, validated_data):
+        modified_by = self.context.get("authored_by")
+        if not helpers.check_profile_department(
+            profile=modified_by, department_name="house keeping"
+        ):
+            raise serializers.ValidationError(
+                {
+                    "error": "only house keeping staff are authorized to complete this action"
+                }
+            )
+        if not helpers.check_profile_role(profile=modified_by, role_name="Supervisor"):
+            raise serializers.ValidationError(
+                {
+                    "error": "only supervisors in house keeping are authorized to complete this action"
+                }
+            )
+        amenities = validated_data.pop("amenities")
+        bed_types = validated_data.pop("bed_types")
+        for attr, value in validated_data.items():
+            if hasattr(instance, attr):
+                setattr(instance, attr, value)
+
+        instance.save()
+        # if there are no amenities provided, use the amenities from the room category
+        instance.amenities.set(
+            amenities or instance.room_category.amenities.all()
+        )
+        instance.bed_types.set(bed_types or instance.bed_types.all())
+        return instance
+
+
+class RoomSerializer(serializers.ModelSerializer):
+    room_type = serializers.SlugRelatedField(
+        slug_field="name", queryset=models.RoomType.objects.all()
+    )
+    floor = serializers.SlugRelatedField(
+        slug_field="name", queryset=models.HotelFloor.objects.all()
+    )
+    room_category = serializers.SlugRelatedField(
+        slug_field="name", queryset=models.RoomCategory.objects.all()
+    )
+    amenities = serializers.SlugRelatedField(
+        slug_field="name",
+        many=True,
+        queryset=models.Amenity.objects.all(),
+        allow_null=True,
+    )
+    bed_type = serializers.SlugRelatedField(
+        slug_field="name", queryset=models.BedType.objects.all(), allow_null=True
+    )
+    rate = serializers.DecimalField(allow_null=True, max_digits=10, decimal_places=2)
+
+    class Meta:
+        model = models.Room
+        fields = [
+            "id",
+            "room_number",
+            "room_type",
+            "room_category",
+            "max_guests",
+            "rate",
+            "floor",
+            "room_maintenance_status",
+            "room_booking_status",
+            "amenities",
+            "bed_type",
+        ]
+        read_only_fields = ["id", "room_maintenance_status", "room_booking_status"]
+
+    def validate(self, attrs):
+        if attrs.get("rate") and (attrs.get("rate") > attrs.get("room_type").rate):
+            raise serializers.ValidationError(
+                {"error": "The room's rate cannot be greater than the room type's rate"}
+            )
+        if attrs.get("max_guests") and (
+            attrs.get("max_guests") > attrs.get("room_type").max_guests
+        ):
+            raise serializers.ValidationError(
+                {
+                    "error": "The room's max guests cannot be greater than the room type's max guests"
+                }
+            )
+        return attrs
+
+    def create(self, validated_data):
+        created_by = self.context.get("authored_by")
+        if not helpers.check_profile_department(
+            profile=created_by, department_name="house keeping"
+        ):
+            raise serializers.ValidationError(
+                {
+                    "error": "only house keeping staff are authorized to complete this action"
+                }
+            )
+        if not helpers.check_profile_role(profile=created_by, role_name="Supervisor"):
+            raise serializers.ValidationError(
+                {
+                    "error": "only supervisors in house keeping are authorized to complete this action"
+                }
+            )
+        # get the rate and max_guests from the room type if not provided
+        rate = validated_data.pop("rate", 0)
+        max_guests = validated_data.pop("max_guests", 0)
+        if not rate:
+            rate = validated_data.get("room_type").rate
+        if not max_guests:
+            max_guests = validated_data.get("room_type").max_guests
+
+        # get the amenities from the room type if not provided
+        amenities = validated_data.pop("amenities")
+        if not amenities:
+            amenities = validated_data.get("room_type").amenities.all()
+
+        room = models.Room.objects.create(
+            created_by=created_by,
+            **validated_data,
+            rate=rate,
+            max_guests=max_guests,
+            room_maintenance_status="used",
+            room_booking_status="unavailable",
+            is_occupied=False,
+        )
+        room.amenities.set(amenities)
+        return room
+
+    def update(self, instance, validated_data):
+        modified_by = self.context.get("authored_by")
+        if not helpers.check_profile_department(
+            profile=modified_by, department_name="house keeping"
+        ):
+            raise serializers.ValidationError(
+                {
+                    "error": "only house keeping staff are authorized to complete this action"
+                }
+            )
+        if not helpers.check_profile_role(profile=modified_by, role_name="Supervisor"):
+            raise serializers.ValidationError(
+                {
+                    "error": "only supervisors in house keeping are authorized to complete this action"
+                }
+            )
+
+        rate = validated_data.pop("rate", 0)
+        max_guests = validated_data.pop("max_guests", 0)
+        if not rate:
+            rate = validated_data.get("room_type").rate
+        if not max_guests:
+            max_guests = validated_data.get("room_type").max_guests
+
+        # get the amenities from the room type if not provided
+        amenities = validated_data.pop("amenities")
+        if not amenities:
+            amenities = validated_data.get("room_type").amenities.all()
+
+        for attr, value in validated_data.items():
+            if hasattr(instance, attr):
+                setattr(instance, attr, value)
+
+        instance.rate = rate
+        instance.max_guests = max_guests
+        instance.amenities.set(amenities)
+
+        instance.save()
+
+        return instance
+
+
+class ComplaintSerializer(serializers.ModelSerializer):
+    complaint_items = serializers.SlugRelatedField(
+        slug_field="name",
+        many=True,
+        queryset=models.Amenity.objects.all(),
+        allow_null=True,
+    )
+    title = serializers.CharField(max_length=255, allow_null=True)
+
+    class Meta:
+        model = models.Complaint
+        fields = [
+            "id",
+            "client",
+            "room_number",
+            "title",
+            "message",
+            "date_created",
+            "complaint_items",
+            "department",
+            "priority",
+            "status",
+            "date_resolved",
+            "resolved_by",
+            "hashtags",
+        ]
+        read_only_fields = [
+            "id",
+            "date_created",
+            "created_by",
+            "status",
+            "date_resolved",
+            "resolved_by",
+            "hashtags",
+            "department",
+            "priority",
+        ]

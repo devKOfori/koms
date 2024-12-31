@@ -9,6 +9,7 @@ ROOM_BOOKING_STATUS_CHOICES = [
     ("default", "default"),
     ("booked", "booked"),
     ("empty", "empty"),
+    ("unavailable", "unavailable"),
 ]
 
 PASSWORD_RESET_CHANNEL_CHOICES = [("email", "Email"), ("sms", "SMS")]

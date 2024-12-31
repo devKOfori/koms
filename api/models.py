@@ -211,20 +211,6 @@ class HotelFloor(BaseModel):
         db_table = "hotelfloor"
 
 
-class RoomCategory(BaseModel):
-    name = models.CharField(max_length=255)
-    created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
-    date_created = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return self.name
-
-    class Meta:
-        db_table = "roomcategory"
-        verbose_name = "Room Category"
-        verbose_name_plural = "Room Categories"
-
-
 class HotelView(BaseModel):
     name = models.CharField(max_length=255)
     created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
@@ -240,7 +226,7 @@ class HotelView(BaseModel):
 
 
 class Amenity(BaseModel):
-    name = models.CharField(max_length=255)
+    name = models.CharField(max_length=255, unique=True)
     created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
     date_created = models.DateTimeField(auto_now_add=True)
 
@@ -252,6 +238,34 @@ class Amenity(BaseModel):
         verbose_name = "Amenity"
         verbose_name_plural = "Amenities"
 
+class BedType(BaseModel):
+    name = models.CharField(max_length=255)
+    created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
+    date_created = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = "bedtype"
+        verbose_name = "Bed Type"
+        verbose_name_plural = "Beds Types"
+
+
+class RoomCategory(BaseModel):
+    name = models.CharField(max_length=255, unique=True)
+    amenities = models.ManyToManyField(Amenity)
+    created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
+    date_created = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = "roomcategory"
+        verbose_name = "Room Category"
+        verbose_name_plural = "Room Categories"
+
 
 class RoomType(BaseModel):
     name = models.CharField(max_length=255)
@@ -261,10 +275,10 @@ class RoomType(BaseModel):
     area_in_meters = models.DecimalField(max_digits=4, decimal_places=1, default=0.0)
     area_in_feet = models.DecimalField(max_digits=4, decimal_places=1, default=0.0)
     max_guests = models.IntegerField(default=1)
-    bed = models.CharField(max_length=255)
+    bed_types = models.ManyToManyField(BedType)
     view = models.ForeignKey(HotelView, on_delete=models.SET_NULL, null=True)
     amenities = models.ManyToManyField(Amenity)
-    price_per_night = models.DecimalField(max_digits=6, decimal_places=2, default=0.00)
+    rate = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
     date_created = models.DateTimeField(auto_now_add=True)
 
@@ -280,10 +294,13 @@ class RoomType(BaseModel):
 class Room(BaseModel):
     room_number = models.CharField(max_length=255, db_index=True)
     floor = models.ForeignKey(HotelFloor, on_delete=models.SET_NULL, null=True)
+    room_category = models.ForeignKey(RoomCategory, on_delete=models.SET_NULL, null=True)
     room_type = models.ForeignKey(
         RoomType, on_delete=models.SET_NULL, null=True, related_name="rooms"
     )
-    price_per_night = models.DecimalField(max_digits=6, decimal_places=2, default=0.00)
+    bed_type = models.ForeignKey(
+        BedType, on_delete=models.SET_NULL, null=True, related_name="rooms")
+    rate = models.DecimalField(max_digits=6, decimal_places=2, default=0.00)
     max_guests = models.PositiveIntegerField(default=1, null=True)
     is_occupied = models.BooleanField(default=False)
     created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
@@ -301,6 +318,7 @@ class Room(BaseModel):
     room_booking_status = models.CharField(
         max_length=255, choices=choices.ROOM_BOOKING_STATUS_CHOICES, default="default"
     )
+    amenities = models.ManyToManyField(Amenity)
 
     def __str__(self):
         return self.room_number
@@ -697,3 +715,102 @@ class Checkout(BaseModel):
         db_table = "checkout"
         verbose_name = "Checkout"
         verbose_name_plural = "Checkouts"
+
+class Priority(BaseModel):
+    # eg. low, medium, high
+    name = models.CharField(max_length=255)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = "priority"
+        verbose_name = "Priority"
+        verbose_name_plural = "Priorities"
+
+class ComplaintStatus(BaseModel):
+    # eg. pending, resolved, in-progress
+    name = models.CharField(max_length=255)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = "complaintstatus"
+        verbose_name = "Complaint Status"
+        verbose_name_plural = "Complaint Statuses"
+
+class Hashtag(BaseModel):
+    # eg. #cleaning, #maintenance, #security
+    name = models.CharField(max_length=255)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = "hashtag"
+        verbose_name = "Hashtag"
+        verbose_name_plural = "Hashtags"
+
+class Complaint(BaseModel):
+    client = models.CharField(max_length=255)
+    room_number = models.CharField(max_length=255)
+    title = models.CharField(max_length=255, null=True, blank=True)
+    message = models.TextField()
+    date_created = models.DateTimeField(auto_now_add=True)
+    # created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
+    complaint_items = models.ManyToManyField(Amenity)
+    department= models.ForeignKey(Department, on_delete=models.SET_NULL, null=True) 
+    priority= models.ForeignKey(Priority, on_delete=models.SET_NULL, null=True)
+    status= models.ForeignKey(ComplaintStatus, on_delete=models.SET_NULL, null=True)
+    date_resolved = models.DateTimeField(null=True, blank=True)
+    resolved_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True, related_name="resolved_complaints")
+    hashtags = models.ManyToManyField(Hashtag)
+
+    def __str__(self):
+        return f'{self.client} - {self.room_number}'
+    
+    class Meta:
+        db_table = "complaint"
+        verbose_name = "Complaint"
+        verbose_name_plural = "Complaints"
+
+class AssignComplaint(BaseModel):
+    complaint = models.ForeignKey(Complaint, on_delete=models.CASCADE)
+    client = models.CharField(max_length=255)
+    room_number = models.CharField(max_length=255)
+    title = models.CharField(max_length=255, null=True, blank=True)
+    message = models.TextField()
+    assigned_to = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True, related_name="complaints_assigned")
+    assigned_to_department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True)
+    date_assigned = models.DateTimeField(auto_now_add=True)
+    assigned_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True, related_name="assigned_complaints")
+    status= models.ForeignKey(ComplaintStatus, on_delete=models.SET_NULL, null=True)
+    date_resolved = models.DateTimeField(null=True, blank=True)
+    complaint_items = models.ManyToManyField(Amenity)
+    priority= models.ForeignKey(Priority, on_delete=models.SET_NULL, null=True)
+    hashtags = models.ManyToManyField(Hashtag)
+
+    def __str__(self):
+        return f"{self.complaint} - {self.assigned_to}"
+
+    class Meta:
+        db_table = "assigncomplaint"
+        verbose_name = "Assign Complaint"
+        verbose_name_plural = "Assign Complaints"
+
+class ProcessComplaint(BaseModel):
+    complaint = models.ForeignKey(Complaint, on_delete=models.CASCADE)
+    date_processed = models.DateTimeField(auto_now_add=True)
+    processed_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
+    note = models.TextField()
+    status= models.ForeignKey(ComplaintStatus, on_delete=models.SET_NULL, null=True)
+    date_resolved = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.complaint} - {self.date_processed}"
+
+    class Meta:
+        db_table = "processcomplaint"
+        verbose_name = "Process Complaint"
+        verbose_name_plural = "Process Complaints"

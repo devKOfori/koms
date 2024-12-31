@@ -260,3 +260,135 @@ class BookingCheckout(APIView):
             {"error": "an error occured while checking out the booking"},
             status=status.HTTP_400_BAD_REQUEST,
         )
+    
+class RoomCategoryList(generics.ListCreateAPIView):
+    queryset=models.RoomCategory.objects.all()
+    serializer_class=api_serializers.RoomCategorySerializer
+
+    def get_serializer_context(self):
+        try:
+            profile = models.Profile.objects.get(user=self.request.user)
+        except models.Profile.DoesNotExist:
+            return Response(
+                {"error": "user profile does not exist"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        context = super().get_serializer_context()
+        context["authored_by"] = profile
+        return context
+    
+class RoomCategoryDetail(generics.RetrieveUpdateDestroyAPIView):
+    queryset=models.RoomCategory.objects.all()
+    serializer_class=api_serializers.RoomCategorySerializer
+    lookup_url_kwarg="pk"
+
+    def get_serializer_context(self):
+        try:
+            profile = models.Profile.objects.get(user=self.request.user)
+        except models.Profile.DoesNotExist:
+            return Response(
+                {"error": "user profile does not exist"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        context = super().get_serializer_context()
+        context["authored_by"] = profile
+        return context
+    
+class RoomTypeList(generics.ListCreateAPIView):
+    queryset=models.RoomType.objects.all()
+    serializer_class=api_serializers.RoomTypeSerializer
+
+    def get_serializer_context(self):
+        try:
+            profile = models.Profile.objects.get(user=self.request.user)
+        except models.Profile.DoesNotExist:
+            return Response(
+                {"error": "user profile does not exist"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        context = super().get_serializer_context()
+        context["authored_by"] = profile
+        return context
+    
+class RoomTypeDetail(generics.RetrieveUpdateDestroyAPIView):
+    queryset=models.RoomType.objects.all()
+    serializer_class=api_serializers.RoomTypeSerializer
+    lookup_url_kwarg="pk"
+
+    def get_serializer_context(self):
+        try:
+            profile = models.Profile.objects.get(user=self.request.user)
+        except models.Profile.DoesNotExist:
+            return Response(
+                {"error": "user profile does not exist"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        context = super().get_serializer_context()
+        context["authored_by"] = profile
+        return context
+    
+class RoomList(generics.ListCreateAPIView):
+    queryset=models.Room.objects.all()
+    serializer_class=api_serializers.RoomSerializer
+
+    def get_serializer_context(self):
+        try:
+            profile = models.Profile.objects.get(user=self.request.user)
+        except models.Profile.DoesNotExist:
+            return Response(
+                {"error": "user profile does not exist"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        context = super().get_serializer_context()
+        context["authored_by"] = profile
+        return context
+    
+class RoomDetail(generics.RetrieveUpdateDestroyAPIView):
+    queryset=models.Room.objects.all()
+    serializer_class=api_serializers.RoomSerializer
+    lookup_url_kwarg="pk"
+
+    def get_serializer_context(self):
+        try:
+            profile = models.Profile.objects.get(user=self.request.user)
+        except models.Profile.DoesNotExist:
+            return Response(
+                {"error": "user profile does not exist"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        context = super().get_serializer_context()
+        context["authored_by"] = profile
+        return context
+    
+class AmenityList(generics.ListCreateAPIView):
+    queryset=models.Amenity.objects.all()
+    serializer_class=api_serializers.AmenitySerializer
+
+    def get_serializer_context(self):
+        try:
+            profile = models.Profile.objects.get(user=self.request.user)
+        except models.Profile.DoesNotExist:
+            return Response(
+                {"error": "user profile does not exist"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        context = super().get_serializer_context()
+        context["authored_by"] = profile
+        return context
+    
+class AmenityDetail(generics.RetrieveUpdateDestroyAPIView):
+    queryset=models.Amenity.objects.all()
+    serializer_class=api_serializers.AmenitySerializer
+    lookup_url_kwarg="pk"
+
+    def get_serializer_context(self):
+        try:
+            profile = models.Profile.objects.get(user=self.request.user)
+        except models.Profile.DoesNotExist:
+            return Response(
+                {"error": "user profile does not exist"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        context = super().get_serializer_context()
+        context["authored_by"] = profile
+        return context

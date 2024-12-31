@@ -401,15 +401,15 @@ class HouseKeepingTest(TestCase):
         afternoon_shift = shifts.get(name__iexact="afternoon shift")
         evening_shift = shifts.get(name__iexact="evening shift")
         first_floor = floors.get(name__iexact="first floor")
-        second_floor = floors.get(name__iexact="second floor")
+        self.second_floor = floors.get(name__iexact="second floor")
         third_floor = floors.get(name__iexact="third floor")
         male = genders.get(name__iexact="male")
         female = genders.get(name__iexact="female")
-        suite_category = room_categories.get(name__iexact="suite")
+        self.suite_category = room_categories.get(name__iexact="suite")
         normal_room_category = room_categories.get(name__iexact="room")
         hotel_views = api_models.HotelView.objects.all()
         city_view = hotel_views.get(name__iexact="city")
-        pool_view = hotel_views.get(name__iexact="pool")
+        self.pool_view = hotel_views.get(name__iexact="pool")
         house_keeping_dpt = departments.get(name__iexact="house keeping")
         general_dpt = departments.get(name__iexact="general")
         supervisor_role = roles.get(name__iexact="supervisor")
@@ -432,11 +432,11 @@ class HouseKeepingTest(TestCase):
             [
                 api_models.RoomType(
                     name=name,
-                    room_category=suite_category,
+                    room_category=self.suite_category,
                     max_guests=3,
-                    bed="King Size",
+                    # bed_types=["King Size"],
                     view=city_view,
-                    price_per_night=1000,
+                    rate=1000,
                 )
                 for name in self.room_type_names
             ]
@@ -515,7 +515,7 @@ class HouseKeepingTest(TestCase):
         )
         # Create rooms
         room_types = api_models.RoomType.objects.all()
-        presidential = room_types.get(name__iexact="presidential")
+        self.presidential = room_types.get(name__iexact="presidential")
         deluxe = room_types.get(name__iexact="deluxe")
         room_numbers = ["RM001", "RM002", "RM003", "RM004", "RM005", "RM006"]
         api_models.Room.objects.bulk_create(
@@ -524,7 +524,7 @@ class HouseKeepingTest(TestCase):
                     room_number=room_number,
                     floor=first_floor,
                     room_type=deluxe,
-                    price_per_night=1000.00,
+                    rate=1000.00,
                     is_occupied=False,
                 )
                 for room_number in room_numbers
@@ -557,7 +557,7 @@ class HouseKeepingTest(TestCase):
             department=house_keeping_dpt,
             profile=self.housekeeping_staff_profile,
             shift=morning_shift,
-            date=datetime.date(2024, 12, 28),
+            date=datetime.date(2024, 12, 31),
         )
 
         self.room_keeping_assign = api_models.RoomKeepingAssign.objects.create(
@@ -567,6 +567,9 @@ class HouseKeepingTest(TestCase):
             assigned_to=self.housekeeping_supervisor_profile,
             created_by=self.housekeeping_supervisor_profile,
         )
+
+        self.fridge_amenity = api_models.Amenity.objects.create(name="Fridge")
+        self.king_size_bed = api_models.BedType.objects.create(name="King Size")
 
     def test_house_keeping_assignment_url(self):
         self.assertEqual("/koms/house-keeping/assign/", reverse("assign_house_keeping"))
@@ -579,7 +582,7 @@ class HouseKeepingTest(TestCase):
             content_type="application/json",
             HTTP_AUTHORIZATION=f"Bearer {self.housekeeping_supervisor_access_token}",
         )
-        print(f"Response: {response.json()}")
+        print(f"House Keeping Assignment Response: {response.json()}")
         self.assertEqual(response.status_code, 201)
 
     # def test_house_keeping_assignment_edit(self):
@@ -610,6 +613,313 @@ class HouseKeepingTest(TestCase):
     #     )
     #     print(f"Response: {response.json()}")
     #     self.assertEqual(response.status_code, 201)
+
+    def test_amenity_url(self):
+        self.assertEqual("/koms/amenities/", reverse("amenities"))
+
+    def test_amenity_list(self):
+        url = reverse("amenities")
+        response = self.client.get(
+            url,
+            HTTP_AUTHORIZATION=f"Bearer {self.housekeeping_supervisor_access_token}",
+        )
+        print(response.json())
+        self.assertEqual(response.status_code, 200)
+
+    def test_amenity_detail_url(self):
+        self.assertEqual(
+            f"/koms/amenities/{self.fridge_amenity.id}/", reverse("amenity_details", kwargs={"pk": self.fridge_amenity.id})
+        )
+
+    def test_amenity_detail(self):
+        url = reverse("amenity_details", kwargs={"pk": self.fridge_amenity.id})
+        response = self.client.get(
+            url,
+            HTTP_AUTHORIZATION=f"Bearer {self.housekeeping_supervisor_access_token}",
+        )
+        print(f"Amenity Response: {response.json()}")
+        self.assertEqual(response.status_code, 200)
+
+    def test_amenity_create(self):
+        url = reverse("amenities")
+        data = {"name": "Microwave"}
+        response = self.client.post(
+            url,
+            data=data,
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.housekeeping_supervisor_access_token}",
+        )
+        print(f"Amenity Response: {response.json()}")
+        self.assertEqual(response.status_code, 201)
+
+    def test_amenity_edit(self):
+        url = reverse("amenity_details", kwargs={"pk": self.fridge_amenity.id})
+        data = {"name": "Air Conditioner"}
+        response = self.client.put(
+            url,
+            data=data,
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.housekeeping_supervisor_access_token}",
+        )
+        print(response.json())
+        self.assertEqual(response.status_code, 200)
+
+    def test_amenity_delete(self):
+        url = reverse("amenity_details", kwargs={"pk": self.fridge_amenity.id})
+        response = self.client.delete(
+            url,
+            HTTP_AUTHORIZATION=f"Bearer {self.housekeeping_supervisor_access_token}",
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 204)
+
+    def test_amenity_create_with_unauthorized_user(self):
+        url = reverse("amenities")
+        data = {"name": "Microwave"}
+        response = self.client.post(
+            url,
+            data=data,
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.housekeeping_staff_access_token}",
+        )
+        print(response.json())
+        self.assertEqual(response.status_code, 400)
+
+    def test_room_category_url(self):
+        self.assertEqual("/koms/room-categories/", reverse("room_categories"))
+
+    def test_room_category_list(self):
+        url = reverse("room_categories")
+        response = self.client.get(
+            url,
+            HTTP_AUTHORIZATION=f"Bearer {self.housekeeping_supervisor_access_token}",
+        )
+        print(response.json())
+        self.assertEqual(response.status_code, 200)
+
+    def test_room_category_detail_url(self):
+        self.assertEqual(
+            f"/koms/room-categories/{self.suite_category.id}/",
+            reverse("room_category_details", kwargs={"pk": self.suite_category.id}),
+        )
+
+    def test_room_category_detail(self):
+        url = reverse("room_category_details", kwargs={"pk": self.suite_category.id})
+        response = self.client.get(
+            url,
+            HTTP_AUTHORIZATION=f"Bearer {self.housekeeping_supervisor_access_token}",
+        )
+        print(response.json())
+        self.assertEqual(response.status_code, 200)
+
+    def test_room_category_create(self):
+        url = reverse("room_categories")
+        data = {"name": "RoomSuite", 'amenities': [self.fridge_amenity.name]}
+        response = self.client.post(
+            url,
+            data=data,
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.housekeeping_supervisor_access_token}",
+        )
+        print(response.json())
+        self.assertEqual(response.status_code, 201)
+
+    def test_room_category_edit(self):
+        url = reverse("room_category_details", kwargs={"pk": self.suite_category.id})
+        data = {"name": "Presidential", 'amenities': []}
+        response = self.client.put(
+            url,
+            data=data,
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.housekeeping_supervisor_access_token}",
+        )
+        print(response.json())
+        self.assertEqual(response.status_code, 200)
+
+    def test_room_category_delete(self):
+        url = reverse("room_category_details", kwargs={"pk": self.suite_category.id})
+        response = self.client.delete(
+            url,
+            HTTP_AUTHORIZATION=f"Bearer {self.housekeeping_supervisor_access_token}",
+        )
+        self.assertEqual(response.status_code, 204)
+
+    def test_room_type_url(self):
+        self.assertEqual("/koms/room-types/", reverse("room_types"))
+
+    def test_room_type_list(self):
+        url = reverse("room_types")
+        response = self.client.get(
+            url,
+            HTTP_AUTHORIZATION=f"Bearer {self.housekeeping_supervisor_access_token}",
+        )
+        print(response.json())
+        self.assertEqual(response.status_code, 200)
+
+    def test_room_type_detail_url(self):
+        self.assertEqual(
+            f"/koms/room-types/{self.suite_category.id}/",
+            reverse("room_type_details", kwargs={"pk": self.suite_category.id}),
+        )
+
+    def test_room_type_detail(self):
+        url = reverse("room_type_details", kwargs={"pk": self.presidential.id})
+        response = self.client.get(
+            url,
+            HTTP_AUTHORIZATION=f"Bearer {self.housekeeping_supervisor_access_token}",
+        )
+        print(response.json())
+        self.assertEqual(response.status_code, 200)
+
+    def test_room_type_create(self):
+        url = reverse("room_types")
+        data = {
+            "name": "Presidential",
+            "room_category": self.suite_category.name,
+            "max_guests": 3,
+            "bed_types": [self.king_size_bed.name],
+            "view": self.pool_view.name,
+            "rate": 1000,
+            "areas_in_metres": 100,
+            "areas_in_feet": 100,
+            'amenities': [self.fridge_amenity.name],
+        }
+        response = self.client.post(
+            url,
+            data=data,
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.housekeeping_supervisor_access_token}",
+        )
+        print(response.json())
+        self.assertEqual(response.status_code, 201)
+
+    def test_room_type_edit(self):
+        url = reverse("room_type_details", kwargs={"pk": self.presidential.id})
+        data = {
+            "name": "Presidential",
+            "room_category": self.suite_category.name,
+            "max_guests": 3,
+            "bed_types": [self.king_size_bed.name],
+            "view": self.pool_view.name,
+            "rate": 1000,
+            "areas_in_metres": 100,
+            "areas_in_feet": 100,
+            'amenities': [self.fridge_amenity.name],
+        }
+        response = self.client.put(
+            url,
+            data=data,
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.housekeeping_supervisor_access_token}",
+        )
+        print(f'Room Type Edit Response: {response.json()}')
+        self.assertEqual(response.status_code, 200)
+
+    def test_room_type_delete(self):
+        url = reverse("room_type_details", kwargs={"pk": self.presidential.id})
+        response = self.client.delete(
+            url,
+            HTTP_AUTHORIZATION=f"Bearer {self.housekeeping_supervisor_access_token}",
+        )
+        self.assertEqual(response.status_code, 204)
+
+    def test_room_url(self):
+        self.assertEqual("/koms/rooms/", reverse("rooms"))
+
+    def test_room_list(self):
+        url = reverse("rooms")
+        response = self.client.get(
+            url,
+            HTTP_AUTHORIZATION=f"Bearer {self.housekeeping_supervisor_access_token}",
+        )
+        print(response.json())
+        self.assertEqual(response.status_code, 200)
+
+    def test_room_detail_url(self):
+        self.assertEqual(
+            f"/koms/rooms/{api_models.Room.objects.first().id}/",
+            reverse("room_details", kwargs={"pk": api_models.Room.objects.first().id}),
+        )
+
+    def test_room_detail(self):
+        url = reverse("room_details", kwargs={"pk": api_models.Room.objects.first().id})
+        response = self.client.get(
+            url,
+            HTTP_AUTHORIZATION=f"Bearer {self.housekeeping_supervisor_access_token}",
+        )
+        print(response.json())
+        self.assertEqual(response.status_code, 200)
+
+    def test_room_create(self):
+        url = reverse("rooms")
+        data = {
+            "room_number": "RM007",
+            "room_category": self.suite_category.name,
+            "room_type": self.presidential.name,
+            "floor": self.second_floor.name,
+            "rate": 1000.00,
+            "is_occupied": False,
+            "bed_type": self.king_size_bed.name,
+            'amenities': [],
+        }
+        response = self.client.post(
+            url,
+            data=data,
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.housekeeping_supervisor_access_token}",
+        )
+        print(f'Room Create Response: {response.json()}')
+        self.assertEqual(response.status_code, 201)
+
+    def test_room_edit(self):
+        url = reverse("room_details", kwargs={"pk": api_models.Room.objects.first().id})
+        data = {
+            "room_number": "RM009",
+            "room_category": self.suite_category.name,
+            "room_type": self.presidential.name,
+            "floor": self.second_floor.name,
+            "rate": 1000.00,
+            "is_occupied": False,
+            "bed_type": self.king_size_bed.name,
+            'amenities': [],
+        }
+        response = self.client.put(
+            url,
+            data=data,
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.housekeeping_supervisor_access_token}",
+        )
+        print(response.json())
+        self.assertEqual(response.status_code, 200)
+
+    def test_room_delete(self):
+        url = reverse("room_details", kwargs={"pk": api_models.Room.objects.first().id})
+        response = self.client.delete(
+            url,
+            HTTP_AUTHORIZATION=f"Bearer {self.housekeeping_supervisor_access_token}",
+        )
+        self.assertEqual(response.status_code, 204)
+
+    def test_room_create_with_unauthorized_user(self):
+        url = reverse("rooms")
+        data = {
+            "room_number": "RM007",
+            "room_category": self.suite_category.name,
+            "room_type": self.presidential.name,
+            "floor": self.second_floor.name,
+            "rate": 1000.00,
+            "is_occupied": False,
+            "bed_type": self.king_size_bed.name,
+            'amenities': [],
+        }
+        response = self.client.post(
+            url,
+            data=data,
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.housekeeping_staff_access_token}",
+        )
+        print(response.json())
+        self.assertEqual(response.status_code, 400)
 
     def test_process_room_keeping_url(self):
         self.assertEqual("/koms/house-keeping/process/", reverse("process_roomkeeping"))
@@ -726,7 +1036,7 @@ class BookingTest(TestCase):
                     max_guests=3,
                     bed="King Size",
                     view=city_view,
-                    price_per_night=1000,
+                    rate=1000,
                 )
                 for name in self.room_type_names
             ]
@@ -779,7 +1089,7 @@ class BookingTest(TestCase):
                     room_number=room_number,
                     floor=first_floor,
                     room_type=deluxe,
-                    price_per_night=1000.00,
+                    rate=1000.00,
                     is_occupied=False,
                     max_guests=3,
                     room_maintenance_status="cleaned",
@@ -843,13 +1153,13 @@ class BookingTest(TestCase):
         self.receipt = api_models.Receipt.objects.create(
             issued_to=f"{self.booking_data.get('title')} {self.booking_data.get('first_name')} {self.booking_data.get('last_name')}",
             gender=male,
-            receipt_number='R00000001',
+            receipt_number="R00000001",
             amount_paid=10000,
             amount_available=10000,
             date_issued=datetime.date(2024, 12, 29),
         )
 
-        self.booking_data['receipt'] = self.receipt.receipt_number
+        self.booking_data["receipt"] = self.receipt.receipt_number
 
         self.booking = api_models.Booking.objects.create(
             first_name="Selassie",
@@ -885,13 +1195,13 @@ class BookingTest(TestCase):
         )
         # print(f"Response: {response.json()}")
         self.assertEqual(response.status_code, 201)
-    
+
     def test_booking_self_sponsor_insufficient_receipt_balance(self):
         url = reverse("bookings")
         receipt = self.receipt
-        receipt.amount_available = self.booking_data.get('rate') - 1
+        receipt.amount_available = self.booking_data.get("rate") - 1
         receipt.save()
-        self.booking_data['receipt'] = receipt.receipt_number
+        self.booking_data["receipt"] = receipt.receipt_number
         response = self.client.post(
             path=url,
             data=self.booking_data,
@@ -900,12 +1210,12 @@ class BookingTest(TestCase):
         )
         # print(f"Response: {response.json()}")
         self.assertEqual(response.status_code, 400)
-    
+
     def test_booking_with_credit_sponsor(self):
         url = reverse("bookings")
         booking_data = self.booking_data
-        booking_data['sponsor'] = self.corp_sponsor.id
-        booking_data['receipt'] = ''
+        booking_data["sponsor"] = self.corp_sponsor.id
+        booking_data["receipt"] = ""
         response = self.client.post(
             path=url,
             data=self.booking_data,
@@ -916,22 +1226,22 @@ class BookingTest(TestCase):
         self.assertEqual(response.status_code, 201)
 
     def test_booking_with_invalid_sponsor(self):
-            url = reverse("bookings")
-            booking_data = self.booking_data
-            booking_data['sponsor'] = 9999  # Invalid sponsor ID
-            response = self.client.post(
-                path=url,
-                data=booking_data,
-                content_type="application/json",
-                HTTP_AUTHORIZATION=f"Bearer {self.frontdesk_staff_access_token}",
-            )
-            # print(f"Response: {response.json()}")
-            self.assertEqual(response.status_code, 400)
+        url = reverse("bookings")
+        booking_data = self.booking_data
+        booking_data["sponsor"] = 9999  # Invalid sponsor ID
+        response = self.client.post(
+            path=url,
+            data=booking_data,
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.frontdesk_staff_access_token}",
+        )
+        # print(f"Response: {response.json()}")
+        self.assertEqual(response.status_code, 400)
 
     def test_booking_with_invalid_room(self):
         url = reverse("bookings")
         booking_data = self.booking_data
-        booking_data['room'] = 'INVALID_ROOM'  # Invalid room number
+        booking_data["room"] = "INVALID_ROOM"  # Invalid room number
         response = self.client.post(
             path=url,
             data=booking_data,
@@ -944,7 +1254,7 @@ class BookingTest(TestCase):
     def test_booking_with_missing_fields(self):
         url = reverse("bookings")
         booking_data = self.booking_data
-        del booking_data['first_name']  # Remove required field
+        del booking_data["first_name"]  # Remove required field
         response = self.client.post(
             path=url,
             data=booking_data,
@@ -957,8 +1267,8 @@ class BookingTest(TestCase):
     def test_booking_with_invalid_date_range(self):
         url = reverse("bookings")
         booking_data = self.booking_data
-        booking_data['check_in'] = "2025-01-03"
-        booking_data['check_out'] = "2024-12-30"  # Invalid date range
+        booking_data["check_in"] = "2025-01-03"
+        booking_data["check_out"] = "2024-12-30"  # Invalid date range
         response = self.client.post(
             path=url,
             data=booking_data,
@@ -971,7 +1281,7 @@ class BookingTest(TestCase):
     def test_booking_with_invalid_rate_type(self):
         url = reverse("bookings")
         booking_data = self.booking_data
-        booking_data['rate_type'] = "INVALID_RATE_TYPE"  # Invalid rate type
+        booking_data["rate_type"] = "INVALID_RATE_TYPE"  # Invalid rate type
         response = self.client.post(
             path=url,
             data=booking_data,
@@ -982,10 +1292,13 @@ class BookingTest(TestCase):
         self.assertEqual(response.status_code, 400)
 
     def test_booking_details_url(self):
-        self.assertEqual(f"/koms/bookings/{self.booking.id}/", reverse("booking_details", kwargs={'pk': self.booking.id}))
+        self.assertEqual(
+            f"/koms/bookings/{self.booking.id}/",
+            reverse("booking_details", kwargs={"pk": self.booking.id}),
+        )
 
     def test_booking_details(self):
-        url = reverse("booking_details", kwargs={'pk': self.booking.id})
+        url = reverse("booking_details", kwargs={"pk": self.booking.id})
         response = self.client.get(
             path=url, HTTP_AUTHORIZATION=f"Bearer {self.frontdesk_staff_access_token}"
         )
@@ -995,8 +1308,8 @@ class BookingTest(TestCase):
     def test_booking_extend(self):
         url = reverse("extend_booking")
         extend_data = {
-            'booking_id': self.booking.id,
-            'num_days': 2,
+            "booking_id": self.booking.id,
+            "num_days": 2,
         }
         response = self.client.post(
             path=url,
@@ -1010,7 +1323,7 @@ class BookingTest(TestCase):
     def test_booking_checkout(self):
         url = reverse("checkout_booking")
         checkout_data = {
-            'booking_id': self.booking.id,
+            "booking_id": self.booking.id,
         }
         response = self.client.post(
             path=url,
@@ -1020,4 +1333,3 @@ class BookingTest(TestCase):
         )
         print(f"Checkout Test Response: {response.json()}")
         self.assertEqual(response.status_code, 200)
-
