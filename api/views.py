@@ -392,3 +392,30 @@ class AmenityDetail(generics.RetrieveUpdateDestroyAPIView):
         context = super().get_serializer_context()
         context["authored_by"] = profile
         return context
+
+class ComplaintCreate(generics.ListCreateAPIView):
+    queryset=models.Complaint.objects.all()
+    serializer_class=api_serializers.ComplaintSerializer
+
+
+class ComplaintList(generics.ListAPIView):
+    queryset=models.Complaint.objects.all()
+    serializer_class=api_serializers.ComplaintSerializer
+
+    def get_serializer_context(self):
+        try:
+            profile = models.Profile.objects.get(user=self.request.user)
+        except models.Profile.DoesNotExist:
+            return Response(
+                {"error": "user profile does not exist"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        context = super().get_serializer_context()
+        context["authored_by"] = profile
+        return context
+
+    
+class ComplaintDetail(generics.RetrieveUpdateDestroyAPIView):
+    queryset=models.Complaint.objects.all()
+    serializer_class=api_serializers.ComplaintSerializer
+    lookup_url_kwarg="pk"

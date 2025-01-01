@@ -71,5 +71,13 @@ urlpatterns = [
     path('bookings/extend/', views.BookingExtend.as_view(), name='extend_booking'),
     path('bookings/<uuid:pk>/', views.BookingDetail.as_view(), name='booking_details'),
     path('bookings/checkout/', views.BookingCheckout.as_view(), name='checkout_booking'),
+
+    # urls for complaint management
+    path("complaints/", views.ComplaintList.as_view(), name="complaints"),
+    path("complaints/add/", views.ComplaintCreate.as_view(), name="add_complaint"),
+    path("complaints/<uuid:pk>/", views.ComplaintDetail.as_view(), name="complaint_details"),
 ]
 urlpatterns = format_suffix_patterns(urlpatterns)
+
+
+

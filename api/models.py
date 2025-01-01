@@ -754,7 +754,7 @@ class Hashtag(BaseModel):
 
 class Complaint(BaseModel):
     client = models.CharField(max_length=255)
-    room_number = models.CharField(max_length=255)
+    room_number = models.ForeignKey(Room, on_delete=models.SET_NULL, null=True)
     title = models.CharField(max_length=255, null=True, blank=True)
     message = models.TextField()
     date_created = models.DateTimeField(auto_now_add=True)

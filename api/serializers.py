@@ -1220,6 +1220,7 @@ class ComplaintSerializer(serializers.ModelSerializer):
         allow_null=True,
     )
     title = serializers.CharField(max_length=255, allow_null=True)
+    room_number = serializers.SlugRelatedField(slug_field="room_number", queryset=models.Room.objects.all())
 
     class Meta:
         model = models.Complaint
