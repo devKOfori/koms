@@ -238,6 +238,7 @@ class Amenity(BaseModel):
         verbose_name = "Amenity"
         verbose_name_plural = "Amenities"
 
+
 class BedType(BaseModel):
     name = models.CharField(max_length=255)
     created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
@@ -294,12 +295,15 @@ class RoomType(BaseModel):
 class Room(BaseModel):
     room_number = models.CharField(max_length=255, db_index=True)
     floor = models.ForeignKey(HotelFloor, on_delete=models.SET_NULL, null=True)
-    room_category = models.ForeignKey(RoomCategory, on_delete=models.SET_NULL, null=True)
+    room_category = models.ForeignKey(
+        RoomCategory, on_delete=models.SET_NULL, null=True
+    )
     room_type = models.ForeignKey(
         RoomType, on_delete=models.SET_NULL, null=True, related_name="rooms"
     )
     bed_type = models.ForeignKey(
-        BedType, on_delete=models.SET_NULL, null=True, related_name="rooms")
+        BedType, on_delete=models.SET_NULL, null=True, related_name="rooms"
+    )
     rate = models.DecimalField(max_digits=6, decimal_places=2, default=0.00)
     max_guests = models.PositiveIntegerField(default=1, null=True)
     is_occupied = models.BooleanField(default=False)
@@ -666,7 +670,8 @@ class Booking(BaseModel):
         blank=True,
         related_name="bookings_modified",
     )
-    checked_out=models.BooleanField(default=False)
+    checked_out = models.BooleanField(default=False)
+
     def __str__(self):
         return
 
@@ -680,7 +685,6 @@ class Booking(BaseModel):
         """
         self.check_out = self.check_out + datetime.timedelta(days=num_days)
 
-    
     def checkout(self):
         """
         Check out the client from the room.
@@ -691,21 +695,27 @@ class Booking(BaseModel):
         """
         self.check_out = timezone.now()
 
-    
     class Meta:
         db_table = "booking"
 
+
 class Checkout(BaseModel):
-    booking = models.OneToOneField(Booking, on_delete=models.CASCADE, related_name="checkout")
+    booking = models.OneToOneField(
+        Booking, on_delete=models.CASCADE, related_name="checkout"
+    )
     client = models.ForeignKey(Client, on_delete=models.SET_NULL, null=True)
     room_number = models.CharField(max_length=255, blank=True, null=True)
     first_name = models.CharField(max_length=255)
     last_name = models.CharField(max_length=255)
-    gender= models.ForeignKey(Gender, on_delete=models.SET_NULL, null=True)
+    gender = models.ForeignKey(Gender, on_delete=models.SET_NULL, null=True)
     date_checked_in = models.DateTimeField(default=timezone.now)
     date_checked_out = models.DateTimeField(default=timezone.now)
-    checked_out_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True, related_name="checkouts")
-    checked_in_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True, related_name="checkins")
+    checked_out_by = models.ForeignKey(
+        Profile, on_delete=models.SET_NULL, null=True, related_name="checkouts"
+    )
+    checked_in_by = models.ForeignKey(
+        Profile, on_delete=models.SET_NULL, null=True, related_name="checkins"
+    )
     date_created = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -715,6 +725,7 @@ class Checkout(BaseModel):
         db_table = "checkout"
         verbose_name = "Checkout"
         verbose_name_plural = "Checkouts"
+
 
 class Priority(BaseModel):
     # eg. low, medium, high
@@ -728,6 +739,7 @@ class Priority(BaseModel):
         verbose_name = "Priority"
         verbose_name_plural = "Priorities"
 
+
 class ComplaintStatus(BaseModel):
     # eg. pending, resolved, in-progress
     name = models.CharField(max_length=255)
@@ -739,6 +751,7 @@ class ComplaintStatus(BaseModel):
         db_table = "complaintstatus"
         verbose_name = "Complaint Status"
         verbose_name_plural = "Complaint Statuses"
+
 
 class Hashtag(BaseModel):
     # eg. #cleaning, #maintenance, #security
@@ -752,6 +765,7 @@ class Hashtag(BaseModel):
         verbose_name = "Hashtag"
         verbose_name_plural = "Hashtags"
 
+
 class Complaint(BaseModel):
     client = models.CharField(max_length=255)
     room_number = models.ForeignKey(Room, on_delete=models.SET_NULL, null=True)
@@ -760,35 +774,56 @@ class Complaint(BaseModel):
     date_created = models.DateTimeField(auto_now_add=True)
     # created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
     complaint_items = models.ManyToManyField(Amenity)
-    department= models.ForeignKey(Department, on_delete=models.SET_NULL, null=True) 
-    priority= models.ForeignKey(Priority, on_delete=models.SET_NULL, null=True)
-    status= models.ForeignKey(ComplaintStatus, on_delete=models.SET_NULL, null=True)
-    date_resolved = models.DateTimeField(null=True, blank=True)
-    resolved_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True, related_name="resolved_complaints")
+    department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True)
+    priority = models.ForeignKey(Priority, on_delete=models.SET_NULL, null=True)
+    status = models.ForeignKey(ComplaintStatus, on_delete=models.SET_NULL, null=True)
+    updated_on = models.DateTimeField(null=True, blank=True)
+    updated_by = models.ForeignKey(
+        Profile,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="updated_complaints",
+    )
     hashtags = models.ManyToManyField(Hashtag)
 
     def __str__(self):
-        return f'{self.client} - {self.room_number}'
-    
+        return f"{self.client} - {self.room_number}"
+
     class Meta:
         db_table = "complaint"
         verbose_name = "Complaint"
         verbose_name_plural = "Complaints"
 
+
 class AssignComplaint(BaseModel):
-    complaint = models.ForeignKey(Complaint, on_delete=models.CASCADE)
+    complaint = models.ForeignKey(
+        Complaint, on_delete=models.CASCADE, related_name="assigned_complaints"
+    )
     client = models.CharField(max_length=255)
     room_number = models.CharField(max_length=255)
     title = models.CharField(max_length=255, null=True, blank=True)
     message = models.TextField()
-    assigned_to = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True, related_name="complaints_assigned")
-    assigned_to_department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True)
-    date_assigned = models.DateTimeField(auto_now_add=True)
-    assigned_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True, related_name="assigned_complaints")
-    status= models.ForeignKey(ComplaintStatus, on_delete=models.SET_NULL, null=True)
-    date_resolved = models.DateTimeField(null=True, blank=True)
+    assigned_to = models.ForeignKey(
+        Profile,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="complaints_assigned",
+    )
+    assigned_to_department = models.ForeignKey(
+        Department, on_delete=models.SET_NULL, null=True
+    )
+    date_assigned = models.DateTimeField(default=timezone.now)
+    created_on = models.DateTimeField(auto_now_add=True)
+    assigned_by = models.ForeignKey(
+        Profile,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="assigned_complaints",
+    )
+    complaint_status = models.ForeignKey(ComplaintStatus, on_delete=models.SET_NULL, null=True)
+    updated_on = models.DateTimeField(null=True, blank=True)
     complaint_items = models.ManyToManyField(Amenity)
-    priority= models.ForeignKey(Priority, on_delete=models.SET_NULL, null=True)
+    priority = models.ForeignKey(Priority, on_delete=models.SET_NULL, null=True)
     hashtags = models.ManyToManyField(Hashtag)
 
     def __str__(self):
@@ -798,17 +833,39 @@ class AssignComplaint(BaseModel):
         db_table = "assigncomplaint"
         verbose_name = "Assign Complaint"
         verbose_name_plural = "Assign Complaints"
+        ordering = ["-created_on"]
+
 
 class ProcessComplaint(BaseModel):
-    complaint = models.ForeignKey(Complaint, on_delete=models.CASCADE)
-    date_processed = models.DateTimeField(auto_now_add=True)
-    processed_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
+    complaint = models.ForeignKey(
+        Complaint,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="processed_complaints",
+    )
+    assigned_complaint = models.ForeignKey(
+        AssignComplaint, on_delete=models.SET_NULL, null=True
+    )
+    process_complaint_date = models.DateTimeField(default=timezone.now)
+    processed_by = models.ForeignKey(
+        Profile,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="processed_complaints",
+    )
     note = models.TextField()
-    status= models.ForeignKey(ComplaintStatus, on_delete=models.SET_NULL, null=True)
-    date_resolved = models.DateTimeField(null=True, blank=True)
+    complaint_status = models.ForeignKey(
+        ComplaintStatus,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="processed_complaints",
+    )
+    created_on = models.DateTimeField(auto_now_add=True)
+    updated_on = models.DateTimeField(auto_now=True)
+    # date_resolved = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
-        return f"{self.complaint} - {self.date_processed}"
+        return f"{self.complaint} - {self.process_complaint_date}"
 
     class Meta:
         db_table = "processcomplaint"

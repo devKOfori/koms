@@ -49,7 +49,6 @@ urlpatterns = [
     # urls for amenities management
     path("amenities/", views.AmenityList.as_view(), name="amenities"),
     path("amenities/<uuid:pk>/", views.AmenityDetail.as_view(), name="amenity_details"),
-
     # urls for room category management
     path("room-categories/", views.RoomCategoryList.as_view(), name="room_categories"),
     path(
@@ -57,27 +56,52 @@ urlpatterns = [
         views.RoomCategoryDetail.as_view(),
         name="room_category_details",
     ),
-
     # urls for room type management
     path("room-types/", views.RoomTypeList.as_view(), name="room_types"),
-    path("room-types/<uuid:pk>/", views.RoomTypeDetail.as_view(), name="room_type_details"),
-
+    path(
+        "room-types/<uuid:pk>/",
+        views.RoomTypeDetail.as_view(),
+        name="room_type_details",
+    ),
     # urls for room management
     path("rooms/", views.RoomList.as_view(), name="rooms"),
     path("rooms/<uuid:pk>/", views.RoomDetail.as_view(), name="room_details"),
-
     # urls for booking management
     path("bookings/", views.BookingList.as_view(), name="bookings"),
-    path('bookings/extend/', views.BookingExtend.as_view(), name='extend_booking'),
-    path('bookings/<uuid:pk>/', views.BookingDetail.as_view(), name='booking_details'),
-    path('bookings/checkout/', views.BookingCheckout.as_view(), name='checkout_booking'),
-
+    path("bookings/extend/", views.BookingExtend.as_view(), name="extend_booking"),
+    path("bookings/<uuid:pk>/", views.BookingDetail.as_view(), name="booking_details"),
+    path(
+        "bookings/checkout/", views.BookingCheckout.as_view(), name="checkout_booking"
+    ),
     # urls for complaint management
     path("complaints/", views.ComplaintList.as_view(), name="complaints"),
     path("complaints/add/", views.ComplaintCreate.as_view(), name="add_complaint"),
-    path("complaints/<uuid:pk>/", views.ComplaintDetail.as_view(), name="complaint_details"),
+    path(
+        "complaints/<uuid:pk>/",
+        views.ComplaintDetail.as_view(),
+        name="complaint_details",
+    ),
+    # urls for assign complaint management
+    path(
+        "complaints/assign/",
+        views.AssignComplaintList.as_view(),
+        name="assign_complaint",
+    ),
+    path(
+        "complaints/assign/<uuid:pk>/",
+        views.AssignComplaintDetail.as_view(),
+        name="assign_complaint_details",
+    ),
+    # urls for complaint process management
+    path(
+        "complaints/process/",
+        views.ProcessComplaintList.as_view(),
+        name="process_complaint",
+    ),
+    path(
+        "complaints/process/<uuid:pk>/",
+        views.ProcessComplaintDetail.as_view(),
+        name="process_complaint_details",
+    ),
 ]
 urlpatterns = format_suffix_patterns(urlpatterns)
-
-
-

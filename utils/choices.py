@@ -19,3 +19,10 @@ GENDER_CHOICES = [("female", "Female"), ("male", "Male")]
 RATE_TYPE_CHOICES = [("member", "Member"), ("non-member", "Non-Member")]
 
 RECEIPT_STATUS_CHOICES = [("activated", "Activated"), ("deactivated", "Deactivated")]
+
+ASSIGN_COMPLAINT_STATUS_CHOICES = [
+    ("department", "Transfer to Department"),
+    ("staff", "Transfer to Staff"),
+    ("resolved", "Resolved"),
+    (None, "Default"),
+]

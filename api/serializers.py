@@ -1069,9 +1069,7 @@ class RoomTypeSerializer(serializers.ModelSerializer):
 
         instance.save()
         # if there are no amenities provided, use the amenities from the room category
-        instance.amenities.set(
-            amenities or instance.room_category.amenities.all()
-        )
+        instance.amenities.set(amenities or instance.room_category.amenities.all())
         instance.bed_types.set(bed_types or instance.bed_types.all())
         return instance
 
@@ -1212,6 +1210,177 @@ class RoomSerializer(serializers.ModelSerializer):
         return instance
 
 
+class AssignComplaintSerializer(serializers.ModelSerializer):
+    assigned_to = serializers.PrimaryKeyRelatedField(
+        queryset=models.Profile.objects.all(), allow_null=True
+    )
+    assigned_to_department = serializers.SlugRelatedField(
+        slug_field="name", queryset=models.Department.objects.all(), allow_null=True
+    )
+    # complaint = serializers.PrimaryKeyRelatedField(queryset=models.Complaint.objects.all())
+    priority = serializers.SlugRelatedField(
+        slug_field="name", queryset=models.Priority.objects.all(), allow_null=True
+    )
+    hashtags = serializers.SlugRelatedField(
+        slug_field="name",
+        queryset=models.Hashtag.objects.all(),
+        many=True,
+        allow_null=True,
+    )
+    assigned_by = serializers.PrimaryKeyRelatedField(read_only=True)
+
+    class Meta:
+        model = models.AssignComplaint
+        fields = [
+            "id",
+            "complaint",
+            "assigned_to",
+            "assigned_to_department",
+            "date_assigned",
+            "assigned_by",
+            "priority",
+            "hashtags",
+            "created_on",
+        ]
+        read_only_fields = ["id", "created_on", "assigned_by"]
+
+    def validate(self, attrs):
+        created_by = self.context.get("authored_by")
+        if not helpers.check_profile_department(
+            profile=created_by, department_name="frontdesk"
+        ):
+            raise serializers.ValidationError(
+                {"error": "only frontdesk staff are authorized to complete this action"}
+            )
+        if not helpers.check_profile_role(profile=created_by, role_name="Supervisor"):
+            raise serializers.ValidationError(
+                {
+                    "error": "only supervisors in frontdesk are authorized to complete this action"
+                }
+            )
+
+        assigned_to = attrs.get("assigned_to")
+        assigned_to_department = attrs.get("assigned_to_department")
+        # check if the complaint is being assigned to a staff or a department
+        if not assigned_to and not assigned_to_department:
+            raise serializers.ValidationError(
+                {
+                    "error": "you must provide either a staff or a department to assign the complaint to"
+                }
+            )
+        return attrs
+
+    def create(self, validated_data):
+        assigned_by = self.context.get("authored_by")
+        complaint = validated_data.get("complaint")
+        title = complaint.title
+        message = complaint.message
+        hashtags = validated_data.pop("hashtags")
+        with transaction.atomic():
+            instance = models.AssignComplaint.objects.create(
+                title=title, message=message, **validated_data, assigned_by=assigned_by
+            )
+            instance.hashtags.set(hashtags)
+            # change the status of the complaint to assigned
+            complaint_status_assigned, _ = models.ComplaintStatus.objects.get_or_create(
+                name="assigned"
+            )
+            complaint.complaint_status = complaint_status_assigned
+            complaint.save()
+        return instance
+
+    def update(self, instance, validated_data):
+        hashtags = validated_data.pop("hashtags")
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        instance.save()
+        instance.hashtags.set(hashtags)
+        return instance
+
+
+class ProcessComplaintSerializer(serializers.ModelSerializer):
+    complaint_status = serializers.SlugRelatedField(
+        slug_field="name", queryset=models.ComplaintStatus.objects.all()
+    )
+    complaint = serializers.PrimaryKeyRelatedField(
+        queryset=models.Complaint.objects.all(), allow_null=True
+    )
+    assigned_complaint = serializers.PrimaryKeyRelatedField(
+        queryset=models.AssignComplaint.objects.all(), allow_null=True
+    )
+
+    class Meta:
+        model = models.ProcessComplaint
+        fields = [
+            "id",
+            "complaint",
+            "assigned_complaint",
+            "process_complaint_date",
+            "note",
+            "complaint_status",
+        ]
+        read_only_fields = ["id"]
+
+    def create(self, validated_data):
+        processed_by = self.context.get("authored_by")
+        complaint = validated_data.get("complaint")
+        assigned_complaint = validated_data.get("assigned_complaint")
+        complaint_status = validated_data.get("complaint_status")
+        complaint_updated_on = validated_data.get("created_on")
+        with transaction.atomic():
+            if not complaint and not assigned_complaint:
+                raise serializers.ValidationError(
+                    {
+                        "error": "you must provide either a complaint or an assigned complaint"
+                    }
+                )
+            instance = models.ProcessComplaint.objects.create(
+                **validated_data, processed_by=processed_by
+            )
+            # change the status of the complaint to resolved
+            if complaint:
+                complaint.status = complaint_status
+                complaint.updated_on = complaint_updated_on
+                complaint.updated_by = processed_by
+                complaint.save()
+
+            if assigned_complaint:
+                # check if the user is authorized to process the complaint
+                if (
+                    assigned_complaint.assigned_to
+                    and not assigned_complaint.assigned_to == processed_by
+                ):
+                    raise serializers.ValidationError(
+                        {"error": "you are not authorized to process this complaint"}
+                    )
+                if (assigned_complaint.assigned_to_department) and (
+                    assigned_complaint.assigned_to_department != processed_by.department
+                ):
+                    raise serializers.ValidationError(
+                        {"error": "you are not authorized to process this complaint"}
+                    )
+                assigned_complaint.status = complaint_status
+                assigned_complaint.updated_on = complaint_updated_on
+                assigned_complaint.save()
+        return instance
+
+    def update(self, instance, validated_data):
+        processed_by = self.context.get("authored_by")
+        if instance.processed_by != processed_by:
+            raise serializers.ValidationError(
+                {"error": "you are not authorized to update this record"}
+            )
+        if instance.processed_by.department != processed_by.department:
+            raise serializers.ValidationError(
+                {"error": "you are not authorized to update this record"}
+            )
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        return instance
+
+
 class ComplaintSerializer(serializers.ModelSerializer):
     complaint_items = serializers.SlugRelatedField(
         slug_field="name",
@@ -1220,7 +1389,11 @@ class ComplaintSerializer(serializers.ModelSerializer):
         allow_null=True,
     )
     title = serializers.CharField(max_length=255, allow_null=True)
-    room_number = serializers.SlugRelatedField(slug_field="room_number", queryset=models.Room.objects.all())
+    room_number = serializers.SlugRelatedField(
+        slug_field="room_number", queryset=models.Room.objects.all()
+    )
+    assigned_complaints = AssignComplaintSerializer(many=True, read_only=True)
+    process_complaints = ProcessComplaintSerializer(many=True, read_only=True)
 
     class Meta:
         model = models.Complaint
@@ -1235,17 +1408,19 @@ class ComplaintSerializer(serializers.ModelSerializer):
             "department",
             "priority",
             "status",
-            "date_resolved",
-            "resolved_by",
+            "updated_on",
+            "updated_by",
             "hashtags",
+            "assigned_complaints",
+            "process_complaints",
         ]
         read_only_fields = [
             "id",
             "date_created",
             "created_by",
             "status",
-            "date_resolved",
-            "resolved_by",
+            "updated_on",
+            "updated_by",
             "hashtags",
             "department",
             "priority",

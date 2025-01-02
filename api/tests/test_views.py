@@ -1399,8 +1399,9 @@ class ComplaintTest(TestCase):
             "message": "I checked in and the room was not cleaned",
             "room_number": "RM001",
             "client": "Selassie Awagah",
-            'complaint_items': [],
+            "complaint_items": [],
         }
+
     def setUp(self):
         departments = api_models.Department.objects.all()
         roles = api_models.Role.objects.all()
@@ -1489,10 +1490,8 @@ class ComplaintTest(TestCase):
         # )
 
         # Create user accounts for house-keeping supervisor and staff
-        self.frontdesk_supervisor_account = (
-            api_models.CustomUser.objects.create_user(
-                **self.frontdesk_supervisor_data
-            )
+        self.frontdesk_supervisor_account = api_models.CustomUser.objects.create_user(
+            **self.frontdesk_supervisor_data
         )
         self.frontdesk_staff_account = api_models.CustomUser.objects.create_user(
             **self.frontdesk_staff_data
@@ -1589,6 +1588,27 @@ class ComplaintTest(TestCase):
             client="Selassie Awagah",
         )
 
+        self.resolved_status = api_models.ComplaintStatus.objects.create(
+            name="resolved"
+        )
+        self.on_hold_status = api_models.ComplaintStatus.objects.create(name="On-hold")
+
+        self.assign_complaint = api_models.AssignComplaint.objects.create(
+            complaint=self.complaint,
+            assigned_to=self.frontdesk_staff_profile,
+            client="Selassie Awagah",
+            room_number=self.complaint.room_number,
+            message=self.complaint.message,
+        )
+
+        self.process_complaint = api_models.ProcessComplaint.objects.create(
+            complaint=self.complaint,
+            note="Room cleaned",
+            process_complaint_date=datetime.date.today(),
+            complaint_status=self.resolved_status,
+            processed_by=self.frontdesk_staff_profile,
+        )
+
     def test_complaint_url(self):
         self.assertEqual("/koms/complaints/", reverse("complaints"))
 
@@ -1600,7 +1620,7 @@ class ComplaintTest(TestCase):
         response = self.client.get(
             path=url, HTTP_AUTHORIZATION=f"Bearer {self.frontdesk_staff_access_token}"
         )
-        print(f'Complaint List Response: {response.json()}')
+        print(f"\nComplaint List Response: {response.json()}")
         self.assertEqual(response.status_code, 200)
 
     def test_complaint_create(self):
@@ -1611,7 +1631,7 @@ class ComplaintTest(TestCase):
             content_type="application/json",
             # HTTP_AUTHORIZATION=f"Bearer {self.frontdesk_staff_access_token}",
         )
-        print(f'Complaint Create Response: {response.json()}')
+        print(f"\nComplaint Create Response: {response.json()}")
         self.assertEqual(response.status_code, 201)
 
     def test_complaint_detail_url(self):
@@ -1635,7 +1655,7 @@ class ComplaintTest(TestCase):
             content_type="application/json",
             # HTTP_AUTHORIZATION=f"Bearer {self.frontdesk_staff_access_token}",
         )
-        print(f'Complaint Edit Response: {response.json()}')
+        print(f"\nComplaint Edit Response: {response.json()}")
         self.assertEqual(response.status_code, 200)
 
     def test_complaint_delete(self):
@@ -1646,4 +1666,165 @@ class ComplaintTest(TestCase):
         )
         self.assertEqual(response.status_code, 204)
 
-        
+    def test_assign_complaint_url(self):
+        self.assertEqual("/koms/complaints/assign/", reverse("assign_complaint"))
+
+    def test_assign_complaint(self):
+        url = reverse("assign_complaint")
+        data = {
+            "complaint": self.complaint.id,
+            "assigned_to": self.frontdesk_staff_profile.id,
+            "assigned_to_department": "",
+            "created_on": datetime.datetime.today(),
+            "hashtags": [],
+            "priority": "",
+        }
+        response = self.client.post(
+            path=url,
+            data=data,
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.frontdesk_supervisor_access_token}",
+        )
+        print(f"\nAssign Complaint Response: {response.json()}")
+        self.assertEqual(response.status_code, 201)
+
+    def test_assign_complaint_to_no_staff_or_department(self):
+        url = reverse("assign_complaint")
+        data = {
+            "complaint": self.complaint.id,
+            "assigned_to": "",
+            "assigned_to_department": "",
+            "hashtags": [],
+            "priority": "",
+        }
+        response = self.client.post(
+            path=url,
+            data=data,
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.frontdesk_supervisor_access_token}",
+        )
+        print(f"\nAssign Complaint Response: {response.json()}")
+        self.assertEqual(response.status_code, 400)
+
+    def test_assign_complaint_edit(self):
+        url = reverse(
+            "assign_complaint_details", kwargs={"pk": self.assign_complaint.id}
+        )
+        data = {
+            "complaint": self.assign_complaint.complaint.id,
+            "assigned_to": self.frontdesk_staff_profile.id,
+            "assigned_to_department": "",
+            "hashtags": [],
+            "priority": "",
+        }
+        response = self.client.put(
+            path=url,
+            data=data,
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.frontdesk_supervisor_access_token}",
+        )
+        print(f"\nAssign Complaint Edit Response: {response.json()}")
+        self.assertEqual(response.status_code, 200)
+
+    def test_assign_complaint_delete(self):
+        url = reverse(
+            "assign_complaint_details", kwargs={"pk": self.assign_complaint.id}
+        )
+        response = self.client.delete(
+            path=url,
+            HTTP_AUTHORIZATION=f"Bearer {self.frontdesk_supervisor_access_token}",
+        )
+        self.assertEqual(response.status_code, 204)
+
+    def test_process_complaint_url(self):
+        self.assertEqual("/koms/complaints/process/", reverse("process_complaint"))
+
+    def test_process_complaint_normal(self):
+        url = reverse("process_complaint")
+        data = {
+            "complaint": self.complaint.id,
+            "assigned_complaint": None,
+            "note": "Room cleaned",
+            "complaint_status": self.resolved_status.name,
+            "process_complaint_date": datetime.date.today(),
+        }
+        response = self.client.post(
+            path=url,
+            data=data,
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.frontdesk_staff_access_token}",
+        )
+        print(f"\nProcess Complaint Response normal: {response.json()}")
+        self.assertEqual(response.status_code, 201)
+
+    def test_process_complaint_with_assigned_complaint(self):
+        url = reverse("process_complaint")
+        data = {
+            "complaint": None,
+            "assigned_complaint": self.assign_complaint.id,
+            "note": "Room cleaned",
+            "complaint_status": self.resolved_status.name,
+            "process_complaint_date": datetime.date.today(),
+        }
+        response = self.client.post(
+            path=url,
+            data=data,
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.frontdesk_staff_access_token}",
+        )
+        print(f"\nProcess Complaint Response with assigned complaints: {response.json()}")
+        self.assertEqual(response.status_code, 201)
+
+    def test_process_complaint_with_no_complaint_or_assigned_complaint(self):
+        url = reverse("process_complaint")
+        data = {
+            "complaint": None,
+            "assigned_complaint": None,
+            "note": "Room cleaned",
+            "complaint_status": self.resolved_status.name,
+            "process_complaint_date": datetime.date.today(),
+        }
+        response = self.client.post(
+            path=url,
+            data=data,
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.frontdesk_staff_access_token}",
+        )
+        print(f"\nProcess Complaint Response with none: {response.json()}")
+        self.assertEqual(response.status_code, 400)
+
+    def test_process_complaint_list(self):
+        url = reverse("process_complaint")
+        response = self.client.get(
+            path=url, HTTP_AUTHORIZATION=f"Bearer {self.frontdesk_staff_access_token}"
+        )
+        print(f"\nProcess Complaint List Response: {response.json()}")
+        self.assertEqual(response.status_code, 200)
+
+    def test_process_complaint_detail_url(self):
+        self.assertEqual(
+            f"/koms/complaints/process/{self.process_complaint.id}/",
+            reverse(
+                "process_complaint_details", kwargs={"pk": self.process_complaint.id}
+            ),
+        )
+
+    def test_process_complaint_edit(self):
+        url = reverse(
+            "process_complaint_details", kwargs={"pk": self.process_complaint.id}
+        )
+        data = {
+            "complaint": self.complaint.id,
+            "assigned_complaint": None,
+            "note": "Room cleaned",
+            "complaint_status": self.on_hold_status.name,
+            "process_complaint_date": datetime.date.today(),
+        }
+        response = self.client.put(
+            path=url,
+            data=data,
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.frontdesk_staff_access_token}",
+        )
+        print(f"\nProcess Complaint Edit Response: {response.json()}")
+        self.assertEqual(response.status_code, 200)
