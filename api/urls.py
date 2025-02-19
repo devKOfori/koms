@@ -1,13 +1,18 @@
 from django.urls import path
 from . import views
 from rest_framework.urlpatterns import format_suffix_patterns
+from rest_framework_simplejwt.views import (
+    TokenRefreshView,
+)
 
 urlpatterns = [
+    path("token/", views.CustomTokenObtainPairView.as_view(), name="token_obtain_pair"),
+    path("token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("accounts/", views.ProfileList.as_view(), name="profile"),
     path(
         "accounts/<uuid:pk>/", views.AccountChangeView.as_view(), name="change_profile"
     ),
-    path("accounts/register/", views.RegisterAccountView.as_view(), name="register"),
+    path("accounts/add-user/", views.RegisterAccountView.as_view(), name="register"),
     path("accounts/logout/", views.LogoutView.as_view(), name="logout"),
     path(
         "accounts/change-password/",
@@ -19,18 +24,43 @@ urlpatterns = [
         views.PasswordResetView.as_view(),
         name="reset_password",
     ),
+    path(
+        "accounts/my-department-staff/",
+        views.MyDepartmentStaffList.as_view(),
+        name="my_department_staff",
+    ),
     path("roles/", views.RoleList.as_view(), name="roles"),
     path("departments/", views.DepartmentList.as_view(), name="departments"),
+    path("shifts/", views.ShiftList.as_view(), name="shifts"),
+    path("my-shifts/", views.MyShiftList.as_view(), name="my_shifts"),
     path(
         "shift-management/",
         views.ProfileShiftAssignCreateView.as_view(),
         name="assign_shift",
     ),
+    path("shift-statuses/", views.ShiftStatusList.as_view(), name="shift_statuses"),
     path(
         "shift-management/<uuid:pk>/",
         views.ProfileShiftAssignUpdateView.as_view(),
         name="update_shift",
     ),
+    path(
+        "shift-management/<uuid:pk>/change-status/",
+        views.UpdateAssignedShiftStatus.as_view(),
+        name="change_shift_status",
+    ),
+    path("shifts/<uuid:pk>/notes/", views.ShiftNoteList.as_view(), name="shift_notes"),
+    path(
+        "shifts/notes/<uuid:note_id>/",
+        views.ShiftNoteDetail.as_view(),
+        name="shift_note",
+    ),
+    path(
+        "shift-assignments/",
+        views.ProfileShiftAssignList.as_view(),
+        name="shift_assignments",
+    ),
+    path("shift-assignments/clear/", views.clear_shift_assignments, name="clear_shift"),
     path(
         "house-keeping/assign/",
         views.RoomKeepingAssignCreate.as_view(),
@@ -41,10 +71,15 @@ urlpatterns = [
         views.RoomKeepingAssignUpdate.as_view(),
         name="edit_room_keeping_assign",
     ),
+    # path(
+    #     "house-keeping/process/",
+    #     views.ProcessRoomKeeping.as_view(),
+    #     name="process_roomkeeping",
+    # ),
     path(
-        "house-keeping/process/",
-        views.ProcessRoomKeeping.as_view(),
-        name="process_roomkeeping",
+        "house-keeping/staff",
+        views.HouseKeepingTaskStaffList.as_view(),
+        name="house_keeping_staff",
     ),
     # urls for amenities management
     path("amenities/", views.AmenityList.as_view(), name="amenities"),
@@ -66,6 +101,7 @@ urlpatterns = [
     # urls for room management
     path("rooms/", views.RoomList.as_view(), name="rooms"),
     path("rooms/<uuid:pk>/", views.RoomDetail.as_view(), name="room_details"),
+    path("room-amenities/", views.RoomAmenityList.as_view(), name="room_amenities"),
     # urls for booking management
     path("bookings/", views.BookingList.as_view(), name="bookings"),
     path("bookings/extend/", views.BookingExtend.as_view(), name="extend_booking"),
@@ -103,5 +139,24 @@ urlpatterns = [
         views.ProcessComplaintDetail.as_view(),
         name="process_complaint_details",
     ),
+    # urls for amenity management
+    path("amenities/", views.AmenityList.as_view(), name="amenities"),
+    path("amenities/<uuid:pk>/", views.AmenityDetail.as_view(), name="amenity_details"),
+    # urls for bed management
+    path("bed-types/", views.BedTypeList.as_view(), name="bed_types"),
+    path(
+        "bed-types/<uuid:pk>/", views.BedTypeDetail.as_view(), name="bed_type_details"
+    ),
+    # urls for floor management
+    path("floors/", views.FloorList.as_view(), name="floors"),
+    path("floors/<uuid:pk>/", views.FloorDetail.as_view(), name="floor_details"),
+    # urls form views management
+    path("hotel-views/", views.HotelViewList.as_view(), name="hotel_views"),
+    path(
+        "hotel-views/<uuid:pk>/",
+        views.HotelViewDetail.as_view(),
+        name="hotel_view_details",
+    ),
+    path("priorities/", views.PriorityList.as_view(), name="priorities"),
 ]
 urlpatterns = format_suffix_patterns(urlpatterns)

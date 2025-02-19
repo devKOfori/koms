@@ -2,11 +2,52 @@ from rest_framework import serializers
 from . import models
 from rest_framework import status
 from django.db import transaction
+from django.db.models import Prefetch
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from datetime import timedelta, date, datetime
 from utils import generators, system_variables, notifications, helpers, choices
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """
+    this class customize the token claims
+    by adding the user roles and the user department
+    """
+
+    def validate(self, attrs):
+        print("here...")
+        data = super().validate(attrs=attrs)
+        user = self.user
+        refresh = self.get_token(user=user)
+        data["refresh"] = str(refresh)
+        data["access"] = str(refresh.access_token)
+
+        if hasattr(user, "profile"):
+
+            username = getattr(user, "username", "No Username")
+            user_id = getattr(user, "id", "No ID")
+            profile = getattr(user, "profile", "No Profile")
+            # print(profile)
+            data["username"] = username
+            data["user_id"] = user_id
+            data["profile_id"] = profile.id
+
+            department_name = (
+                getattr(user.profile.department, "name")
+                if hasattr(user.profile, "department")
+                else "unknown"
+            )
+            data["department"] = department_name
+            if hasattr(user.profile, "roles"):
+                roles = [role.role.name for role in user.profile.roles.all()]
+                data["roles"] = roles
+            else:
+                data[roles] = []
+
+        return data
 
 
 class CustomUserSerializer(serializers.ModelSerializer):
@@ -19,7 +60,7 @@ class CustomUserSerializer(serializers.ModelSerializer):
         }
 
     def validate_username(self, value):
-        print("here.......")
+        # print("here.......")
         user_model = get_user_model()
         request = self.context.get(
             "request"
@@ -168,7 +209,6 @@ class CustomUserProfileSerializer(serializers.ModelSerializer):
         gender_data = validated_data.pop("gender")
 
         try:
-            #     department_name = department_data.get('name')
             department = models.Department.objects.get(name__iexact=department_data)
             gender = models.Gender.objects.get(name__iexact=gender_data)
         except models.Department.DoesNotExist:
@@ -363,11 +403,39 @@ class PasswordResetSerializer(serializers.ModelSerializer):
         return instance
 
 
+class ShiftSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.Shift
+        fields = ["id", "name", "start_time", "end_time"]
+        read_only_fields = ["id"]
+
+
 class ProfileShiftAssignSerializer(serializers.ModelSerializer):
+    # profile = CustomUserProfileSerializer()
+    status = serializers.SlugRelatedField(
+        slug_field="name", queryset=models.ShiftStatus.objects.all()
+    )
+    employee_name = serializers.SerializerMethodField(read_only=True)
+    shift_name = serializers.SerializerMethodField(read_only=True)
+
     class Meta:
         model = models.ProfileShiftAssign
-        fields = ["id", "profile", "shift", "date"]
+        fields = [
+            "id",
+            "profile",
+            "shift",
+            "date",
+            "employee_name",
+            "status",
+            "shift_name",
+        ]
         read_only_fields = ["id"]
+
+    def get_employee_name(self, obj):
+        return obj.profile.full_name if obj.profile else None
+
+    def get_shift_name(self, obj):
+        return obj.shift.name if obj.shift else None
 
     def validate_date(self, value):
         if value < date.today():
@@ -416,10 +484,16 @@ class ProfileShiftAssignSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
+        shift_end_time = datetime.combine(
+            validated_data.get("date"), validated_data.get("shift").end_time
+        )
         created_by = self.context.get("created_by")
         department = created_by.department
         return models.ProfileShiftAssign.objects.create(
-            department=department, created_by=created_by, **validated_data
+            department=department,
+            created_by=created_by,
+            shift_end_time=shift_end_time,
+            **validated_data,
         )
 
     def update(self, instance, validated_data):
@@ -432,6 +506,84 @@ class ProfileShiftAssignSerializer(serializers.ModelSerializer):
         return instance
 
 
+class MyShiftSerializer(serializers.ModelSerializer):
+    shift = serializers.SlugRelatedField(slug_field="name", read_only=True)
+    start_time = serializers.SerializerMethodField(read_only=True)
+    end_time = serializers.SerializerMethodField(read_only=True)
+    status = serializers.SlugRelatedField(slug_field="name", read_only=True)
+
+    class Meta:
+        model = models.ProfileShiftAssign
+        fields = ["id", "shift", "date", "status", "start_time", "end_time"]
+        read_only_fields = ["id"]
+
+    def get_start_time(self, obj):
+        return obj.shift.start_time if obj.shift else None
+
+    def get_end_time(self, obj):
+        return obj.shift.end_time if obj.shift else None
+
+
+class ShiftStatusSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.ShiftStatus
+        fields = ["id", "name"]
+        read_only_fields = ["id"]
+
+
+class ShiftAssignmentSerializer(serializers.ModelSerializer):
+    profile = serializers.SlugRelatedField(slug_field="full_name", read_only=True)
+
+    class Meta:
+        model = models.ProfileShiftAssign
+        fields = ["id", "profile", "shift", "date", "username"]
+        read_only_fields = ["id"]
+
+
+class ShiftNoteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.ShiftNote
+        fields = ["id", "note", "assigned_shift", "note_date"]
+        read_only_fields = ["id"]
+
+    def validate(self, attrs):
+        assigned_shift = attrs.get("assigned_shift")
+        created_by = self.context.get("created_by")
+        last_modified_by = self.context.get("last_modified_by")
+        if (
+            assigned_shift.profile != created_by
+            and assigned_shift.profile != last_modified_by
+        ):
+            raise serializers.ValidationError(
+                {"error": "You can only add notes to shifts assigned to you"}
+            )
+
+        return attrs
+
+    def create(self, validated_data):
+        created_by = self.context.get("created_by")
+        last_modified_by = self.context.get("last_modified_by")
+        assigned_shift = validated_data.get("assigned_shift")
+        note = validated_data.get("note")
+        note_date = validated_data.get("note_date")
+        shift_note = models.ShiftNote.objects.create(
+            assigned_shift=assigned_shift,
+            note=note,
+            note_date=note_date,
+            created_by=created_by,
+            last_modified_by=last_modified_by,
+        )
+        return shift_note
+
+    def update(self, instance, validated_data):
+        last_modified_by = self.context.get("last_modified_by")
+        instance.note = validated_data.get("note", instance.note)
+        instance.note_date = validated_data.get("note_date", instance.note_date)
+        instance.last_modified_by = last_modified_by
+        instance.save()
+        return instance
+
+
 class RoomKeepingAssignSerializer(serializers.ModelSerializer):
     room = serializers.SlugRelatedField(
         slug_field="room_number", queryset=models.Room.objects.all()
@@ -439,11 +591,29 @@ class RoomKeepingAssignSerializer(serializers.ModelSerializer):
     shift = serializers.SlugRelatedField(
         slug_field="name", queryset=models.Shift.objects.all()
     )
+    priority = serializers.SlugRelatedField(
+        slug_field="name", queryset=models.Priority.objects.all()
+    )
+    status = serializers.SlugRelatedField(
+        slug_field="name",
+        queryset=models.HouseKeepingState.objects.all(),
+        allow_null=True,
+        required=False,
+    )
     # assigned_to = serializers.SlugRelatedField(slug_field='assigned_to__username')
 
     class Meta:
         model = models.RoomKeepingAssign
-        fields = ["id", "room", "shift", "assignment_date", "assigned_to"]
+        fields = [
+            "id",
+            "room",
+            "shift",
+            "assignment_date",
+            "assigned_to",
+            "description",
+            "priority",
+            "status",
+        ]
         read_only_fields = ["id"]
 
     def validate_assignment_date(self, data):
@@ -454,10 +624,11 @@ class RoomKeepingAssignSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
+        print(validated_data)
         created_by = self.context.get("created_by")
         shift = validated_data.get("shift")
         assignment_date = validated_data.get("assignment_date")
-        if not helpers.check_profile_department(created_by, "house keeping"):
+        if not helpers.check_profile_department(created_by, "Housekeeping"):
             raise serializers.ValidationError(
                 {"error": "User must be in house keeping to complete this action"},
                 code=status.HTTP_400_BAD_REQUEST,
@@ -481,17 +652,26 @@ class RoomKeepingAssignSerializer(serializers.ModelSerializer):
             )
 
             # Create default processroomkeeping record
-            default_trans_state = models.HouseKeepingStateTrans.objects.get(
-                initial_trans_state__name__iexact="waiting",
-                final_trans_state__name__iexact="assigned",
-            )
             models.ProcessRoomKeeping.objects.create(
-                room=instance.room,
+                room_number=instance.room.room_number,
                 room_keeping_assign=instance,
-                room_state_trans=default_trans_state,
-                date_processed=instance.date_created,
+                status=models.HouseKeepingState.objects.get(name="Pending"),
+                date_created=instance.date_created,
                 created_by=instance.created_by,
             )
+
+            # Create default processroomkeeping record
+            # default_trans_state = models.HouseKeepingStateTrans.objects.get(
+            #     initial_trans_state__name__iexact="waiting",
+            #     final_trans_state__name__iexact="assigned",
+            # )
+            # models.ProcessRoomKeeping.objects.create(
+            #     room=instance.room,
+            #     room_keeping_assign=instance,
+            #     room_state_trans=default_trans_state,
+            #     date_processed=instance.date_created,
+            #     created_by=instance.created_by,
+            # )
         return instance
 
     def update(self, instance, validated_data):
@@ -505,114 +685,113 @@ class RoomKeepingAssignSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
 
+    # class ProcessRoomKeepingSerializer(serializers.ModelSerializer):
+    #     room_state_trans = serializers.SlugRelatedField(
+    #         slug_field="name",
+    #         queryset=models.HouseKeepingStateTrans.objects.all(),
+    #     )
+    #     shift = serializers.SlugRelatedField(slug_field="name", read_only=True)
+    #     # shift = serializers.SlugRelatedField(
+    #     #     slug_field="name", queryset=models.Shift.objects.all(), read_only=True
+    #     # )
+    #     room = serializers.SlugRelatedField(slug_field="room_number", read_only=True)
+    #     # room = serializers.SlugRelatedField(
+    #     #     slug_field="room_number", queryset=models.Room.objects.all(), read_only=True
+    #     # )
 
-class ProcessRoomKeepingSerializer(serializers.ModelSerializer):
-    room_state_trans = serializers.SlugRelatedField(
-        slug_field="name",
-        queryset=models.HouseKeepingStateTrans.objects.all(),
-    )
-    shift = serializers.SlugRelatedField(slug_field="name", read_only=True)
-    # shift = serializers.SlugRelatedField(
-    #     slug_field="name", queryset=models.Shift.objects.all(), read_only=True
-    # )
-    room = serializers.SlugRelatedField(slug_field="room_number", read_only=True)
-    # room = serializers.SlugRelatedField(
-    #     slug_field="room_number", queryset=models.Room.objects.all(), read_only=True
-    # )
+    # class Meta:
+    #     model = models.ProcessRoomKeeping
+    #     fields = [
+    #         "id",
+    #         "room_keeping_assign",
+    #         "room",
+    #         "room_state_trans",
+    #         "date_processed",
+    #         "shift",
+    #         "note",
+    #         "created_by",
+    #     ]
+    #     read_only_fields = [
+    #         "id",
+    #         "shift",
+    #         "created_by",
+    #         "room",
+    #     ]
 
-    class Meta:
-        model = models.ProcessRoomKeeping
-        fields = [
-            "id",
-            "room_keeping_assign",
-            "room",
-            "room_state_trans",
-            "date_processed",
-            "shift",
-            "note",
-            "created_by",
-        ]
-        read_only_fields = [
-            "id",
-            "shift",
-            "created_by",
-            "room",
-        ]
+    # def validate(self, attrs):
+    #     user_profile = self.context.get("authored_by")
+    #     if not helpers.check_profile_department(
+    #         profile=user_profile,
+    #         department_name=system_variables.DEPARTMENT_NAMES.get("house_keeping"),
+    #     ):
+    #         raise serializers.ValidationError(
+    #             {
+    #                 "error": "only staff of housekeeping department can complete this action"
+    #             }
+    #         )
 
-    def validate(self, attrs):
-        user_profile = self.context.get("authored_by")
-        if not helpers.check_profile_department(
-            profile=user_profile,
-            department_name=system_variables.DEPARTMENT_NAMES.get("house_keeping"),
-        ):
-            raise serializers.ValidationError(
-                {
-                    "error": "only staff of housekeeping department can complete this action"
-                }
-            )
+    #     # faulty rooms requires that notes are added
+    #     room_state_trans = attrs.get("room_state_trans")
+    #     final_trans_state = room_state_trans.final_trans_state
+    #     if (
+    #         final_trans_state
+    #         and str(final_trans_state.name).casefold() == "faulty"
+    #         and not attrs.get("note")
+    #     ):
+    #         raise serializers.ValidationError(
+    #             {"error": "you are required to add some notes for faulty rooms"}
+    #         )
 
-        # faulty rooms requires that notes are added
-        room_state_trans = attrs.get("room_state_trans")
-        final_trans_state = room_state_trans.final_trans_state
-        if (
-            final_trans_state
-            and str(final_trans_state.name).casefold() == "faulty"
-            and not attrs.get("note")
-        ):
-            raise serializers.ValidationError(
-                {"error": "you are required to add some notes for faulty rooms"}
-            )
+    #     # only supervisors can set IP state
+    #     # print(f'supervisor account? {helpers.check_profile_role(
+    #     #         profile=user_profile,
+    #     #         role_name=system_variables.ROLE_NAMES.get("supervisor"),
+    #     #     )}')
+    #     # print(f'User profile dept: {user_profile.roles.all()}')
+    #     if (
+    #         final_trans_state
+    #         and str(final_trans_state.name).casefold() == "ip"
+    #         and not helpers.check_profile_role(
+    #             profile=user_profile,
+    #             role_name=system_variables.ROLE_NAMES.get("supervisor"),
+    #         )
+    #     ):
+    #         raise serializers.ValidationError(
+    #             {"error": "only supervisors can set state to IP"}
+    #         )
 
-        # only supervisors can set IP state
-        # print(f'supervisor account? {helpers.check_profile_role(
-        #         profile=user_profile,
-        #         role_name=system_variables.ROLE_NAMES.get("supervisor"),
-        #     )}')
-        # print(f'User profile dept: {user_profile.roles.all()}')
-        if (
-            final_trans_state
-            and str(final_trans_state.name).casefold() == "ip"
-            and not helpers.check_profile_role(
-                profile=user_profile,
-                role_name=system_variables.ROLE_NAMES.get("supervisor"),
-            )
-        ):
-            raise serializers.ValidationError(
-                {"error": "only supervisors can set state to IP"}
-            )
+    #     # shift has not been assigned to you
+    #     room_keeping_assign = attrs.get("room_keeping_assign")
+    #     if user_profile != room_keeping_assign.assigned_to:
+    #         # print(f'assigned_to and user_profile {attrs.get('assigned_to')}  {user_profile}')
+    #         raise serializers.ValidationError(
+    #             {"error": "Task has not been assigned to you"}
+    #         )
+    #     return attrs
 
-        # shift has not been assigned to you
-        room_keeping_assign = attrs.get("room_keeping_assign")
-        if user_profile != room_keeping_assign.assigned_to:
-            # print(f'assigned_to and user_profile {attrs.get('assigned_to')}  {user_profile}')
-            raise serializers.ValidationError(
-                {"error": "Task has not been assigned to you"}
-            )
-        return attrs
-
-    def create(self, validated_data):
-        user_profile = self.context.get("authored_by")
-        room_keeping_assign = validated_data.get("room_keeping_assign")
-        shift = room_keeping_assign.shift
-        room: models.Room = room_keeping_assign.room
-        room_state_trans = validated_data.get("room_state_trans")
-        with transaction.atomic():
-            instance = models.ProcessRoomKeeping.objects.create(
-                room=room,
-                room_keeping_assign=room_keeping_assign,
-                room_state_trans=room_state_trans,
-                date_processed=validated_data.get("date_processed"),
-                shift=shift,
-                created_by=user_profile,
-            )
-            if room_state_trans.name == "cleaned-to-ip":
-                # print(f'room status before {room.room_status}')
-                # print('changing room status...')
-                room.change_room_maintenance_status("cleaned")
-                # print('room status changed...')
-                room.save()
-                # print(f'room status after {room.room_status}')
-        return instance
+    # def create(self, validated_data):
+    #     user_profile = self.context.get("authored_by")
+    #     room_keeping_assign = validated_data.get("room_keeping_assign")
+    #     shift = room_keeping_assign.shift
+    #     room: models.Room = room_keeping_assign.room
+    #     room_state_trans = validated_data.get("room_state_trans")
+    #     with transaction.atomic():
+    #         instance = models.ProcessRoomKeeping.objects.create(
+    #             room=room,
+    #             room_keeping_assign=room_keeping_assign,
+    #             room_state_trans=room_state_trans,
+    #             date_processed=validated_data.get("date_processed"),
+    #             shift=shift,
+    #             created_by=user_profile,
+    #         )
+    #         if room_state_trans.name == "cleaned-to-ip":
+    #             # print(f'room status before {room.room_status}')
+    #             # print('changing room status...')
+    #             room.change_room_maintenance_status("cleaned")
+    #             # print('room status changed...')
+    #             room.save()
+    #             # print(f'room status after {room.room_status}')
+    #     return instance
 
 
 class NameTitleSerializer(serializers.ModelSerializer):
@@ -915,7 +1094,7 @@ class AmenitySerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         created_by = self.context.get("authored_by")
         if not helpers.check_profile_department(
-            profile=created_by, department_name="house keeping"
+            profile=created_by, department_name="Housekeeping"
         ):
             raise serializers.ValidationError(
                 {
@@ -930,44 +1109,10 @@ class AmenitySerializer(serializers.ModelSerializer):
             )
         return models.Amenity.objects.create(created_by=created_by, **validated_data)
 
-
-class RoomCategorySerializer(serializers.ModelSerializer):
-    amenities = serializers.SlugRelatedField(
-        slug_field="name", many=True, queryset=models.Amenity.objects.all()
-    )
-
-    class Meta:
-        model = models.RoomCategory
-        fields = ["id", "name", "amenities"]
-        read_only_fields = ["id"]
-
-    def create(self, validated_data):
-        created_by = self.context.get("authored_by")
-        if not helpers.check_profile_department(
-            profile=created_by, department_name="house keeping"
-        ):
-            raise serializers.ValidationError(
-                {
-                    "error": "only house keeping staff are authorized to complete this action"
-                }
-            )
-        if not helpers.check_profile_role(profile=created_by, role_name="Supervisor"):
-            raise serializers.ValidationError(
-                {
-                    "error": "only supervisors in house keeping are authorized to complete this action"
-                }
-            )
-        amenities = validated_data.pop("amenities")
-        room_category = models.RoomCategory.objects.create(
-            created_by=created_by, **validated_data
-        )
-        room_category.amenities.set(amenities)
-        return room_category
-
     def update(self, instance, validated_data):
         modified_by = self.context.get("authored_by")
         if not helpers.check_profile_department(
-            profile=modified_by, department_name="house keeping"
+            profile=modified_by, department_name="Housekeeping"
         ):
             raise serializers.ValidationError(
                 {
@@ -980,17 +1125,87 @@ class RoomCategorySerializer(serializers.ModelSerializer):
                     "error": "only supervisors in house keeping are authorized to complete this action"
                 }
             )
-        amenities = validated_data.pop("amenities")
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
+        return instance
+
+
+class RoomCategorySerializer(serializers.ModelSerializer):
+    amenities = serializers.SlugRelatedField(
+        slug_field="name",
+        many=True,
+        queryset=models.Amenity.objects.all(),
+        allow_null=True,
+    )
+
+    class Meta:
+        model = models.RoomCategory
+        fields = ["id", "name", "amenities"]
+        read_only_fields = [
+            "id",
+        ]
+
+    def create(self, validated_data):
+        created_by = self.context.get("authored_by")
+        if not helpers.check_profile_department(
+            profile=created_by, department_name="housekeeping"
+        ):
+            raise serializers.ValidationError(
+                {
+                    "error": "only house keeping staff are authorized to complete this action"
+                }
+            )
+        if not helpers.check_profile_role(profile=created_by, role_name="Supervisor"):
+            raise serializers.ValidationError(
+                {
+                    "error": "only supervisors in house keeping are authorized to complete this action"
+                }
+            )
+
+        amenities = validated_data.pop("amenities", [])
+        room_category = models.RoomCategory.objects.create(
+            created_by=created_by, **validated_data
+        )
+        room_category.amenities.set(amenities)
+        return room_category
+
+    def update(self, instance, validated_data):
+        modified_by = self.context.get("authored_by")
+        if not helpers.check_profile_department(
+            profile=modified_by, department_name="housekeeping"
+        ):
+            raise serializers.ValidationError(
+                {
+                    "error": "only house keeping staff are authorized to complete this action"
+                }
+            )
+        if not helpers.check_profile_role(profile=modified_by, role_name="Supervisor"):
+            raise serializers.ValidationError(
+                {
+                    "error": "only supervisors in house keeping are authorized to complete this action"
+                }
+            )
+        amenities = validated_data.pop("amenities", [])
+        print(amenities)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        # instance.amenities.set(amenities or instance.amenities.all())
         instance.amenities.set(amenities)
         return instance
 
 
+class BedTypeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.BedType
+        fields = ["id", "name"]
+        read_only_fields = ["id"]
+
+
 class RoomTypeSerializer(serializers.ModelSerializer):
     room_category = serializers.SlugRelatedField(
-        slug_field="name", queryset=models.RoomCategory.objects.all()
+        slug_field="name", queryset=models.RoomCategory.objects.all(), allow_null=True
     )
     amenities = serializers.SlugRelatedField(
         slug_field="name",
@@ -999,7 +1214,7 @@ class RoomTypeSerializer(serializers.ModelSerializer):
         allow_null=True,
     )
     view = serializers.SlugRelatedField(
-        slug_field="name", queryset=models.HotelView.objects.all()
+        slug_field="name", queryset=models.HotelView.objects.all(), allow_null=True
     )
     bed_types = serializers.SlugRelatedField(
         slug_field="name", queryset=models.BedType.objects.all(), many=True
@@ -1018,7 +1233,6 @@ class RoomTypeSerializer(serializers.ModelSerializer):
             "rate",
             "view",
             "max_guests",
-            "bed_types",
         ]
         read_only_fields = ["id"]
 
@@ -1026,29 +1240,31 @@ class RoomTypeSerializer(serializers.ModelSerializer):
         created_by = self.context.get("authored_by")
         room_category = validated_data.get("room_category")
         if not helpers.check_profile_department(
-            profile=created_by, department_name="house keeping"
+            profile=created_by, department_name="Housekeeping"
         ):
             raise serializers.ValidationError(
                 {
                     "error": "only house keeping staff are authorized to complete this action"
                 }
             )
-        amenities = validated_data.pop("amenities")
-        bed_types = validated_data.pop("bed_types")
-        if not amenities:
+        amenities = validated_data.pop("amenities", [])
+        bed_types = validated_data.pop("bed_types", [])
+
+        # assign amenities of the room category if none are provided
+        if not amenities and room_category:
             amenities = room_category.amenities.all()
 
         room_type = models.RoomType.objects.create(
             created_by=created_by, **validated_data
         )
         room_type.amenities.set(amenities)
-        room_type.bed_types.set(bed_types)
+        _ = bed_types and room_type.bed_types.set(bed_types)
         return room_type
 
     def update(self, instance, validated_data):
         modified_by = self.context.get("authored_by")
         if not helpers.check_profile_department(
-            profile=modified_by, department_name="house keeping"
+            profile=modified_by, department_name="Housekeeping"
         ):
             raise serializers.ValidationError(
                 {
@@ -1061,17 +1277,31 @@ class RoomTypeSerializer(serializers.ModelSerializer):
                     "error": "only supervisors in house keeping are authorized to complete this action"
                 }
             )
-        amenities = validated_data.pop("amenities")
-        bed_types = validated_data.pop("bed_types")
+        amenities = validated_data.pop("amenities", [])
+        bed_types = validated_data.pop("bed_types", [])
         for attr, value in validated_data.items():
             if hasattr(instance, attr):
                 setattr(instance, attr, value)
 
         instance.save()
         # if there are no amenities provided, use the amenities from the room category
-        instance.amenities.set(amenities or instance.room_category.amenities.all())
+        instance.amenities.set(amenities)
         instance.bed_types.set(bed_types or instance.bed_types.all())
         return instance
+
+
+class FloorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.HotelFloor
+        fields = ["id", "name"]
+        read_only_fields = ["id"]
+
+
+class HotelViewSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.HotelView
+        fields = ["id", "name"]
+        read_only_fields = ["id"]
 
 
 class RoomSerializer(serializers.ModelSerializer):
@@ -1130,7 +1360,7 @@ class RoomSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         created_by = self.context.get("authored_by")
         if not helpers.check_profile_department(
-            profile=created_by, department_name="house keeping"
+            profile=created_by, department_name="Housekeeping"
         ):
             raise serializers.ValidationError(
                 {
@@ -1161,8 +1391,8 @@ class RoomSerializer(serializers.ModelSerializer):
             **validated_data,
             rate=rate,
             max_guests=max_guests,
-            room_maintenance_status="used",
-            room_booking_status="unavailable",
+            # room_maintenance_status="used",
+            room_booking_status="default",
             is_occupied=False,
         )
         room.amenities.set(amenities)
@@ -1171,7 +1401,7 @@ class RoomSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         modified_by = self.context.get("authored_by")
         if not helpers.check_profile_department(
-            profile=modified_by, department_name="house keeping"
+            profile=modified_by, department_name="Housekeeping"
         ):
             raise serializers.ValidationError(
                 {
@@ -1187,15 +1417,8 @@ class RoomSerializer(serializers.ModelSerializer):
 
         rate = validated_data.pop("rate", 0)
         max_guests = validated_data.pop("max_guests", 0)
-        if not rate:
-            rate = validated_data.get("room_type").rate
-        if not max_guests:
-            max_guests = validated_data.get("room_type").max_guests
 
-        # get the amenities from the room type if not provided
-        amenities = validated_data.pop("amenities")
-        if not amenities:
-            amenities = validated_data.get("room_type").amenities.all()
+        amenities = validated_data.pop("amenities", [])
 
         for attr, value in validated_data.items():
             if hasattr(instance, attr):
@@ -1388,7 +1611,7 @@ class ComplaintSerializer(serializers.ModelSerializer):
         queryset=models.Amenity.objects.all(),
         allow_null=True,
     )
-    title = serializers.CharField(max_length=255, allow_null=True)
+    title = serializers.CharField(max_length=255, allow_null=True, allow_blank=True)
     room_number = serializers.SlugRelatedField(
         slug_field="room_number", queryset=models.Room.objects.all()
     )
@@ -1424,4 +1647,13 @@ class ComplaintSerializer(serializers.ModelSerializer):
             "hashtags",
             "department",
             "priority",
+            "assigned_complaints",
+            "process_complaints",
         ]
+
+
+class PrioritySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.Priority
+        fields = ["id", "name"]
+        read_only_fields = ["id"]

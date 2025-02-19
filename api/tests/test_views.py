@@ -530,7 +530,7 @@ class HouseKeepingTest(TestCase):
                 for room_number in room_numbers
             ]
         )
-        last_room = api_models.Room.objects.last()
+        self.last_room = api_models.Room.objects.last()
         # Get refresh and access token for house-keeping supervisor
         self.housekeeping_supervisor_refresh = RefreshToken.for_user(
             user=self.housekeeping_supervisor_account
@@ -547,7 +547,7 @@ class HouseKeepingTest(TestCase):
 
         self.house_keeping_assignment_data = {
             "shift": morning_shift.name,
-            "room": last_room.room_number,
+            "room": self.last_room.room_number,
             "assignment_date": datetime.date.today(),
             "assigned_to": self.housekeeping_staff_profile.id,
         }
@@ -561,7 +561,7 @@ class HouseKeepingTest(TestCase):
         )
 
         self.room_keeping_assign = api_models.RoomKeepingAssign.objects.create(
-            room=last_room,
+            room=self.last_room,
             shift=morning_shift,
             assignment_date=datetime.date(2024, 12, 28),
             assigned_to=self.housekeeping_supervisor_profile,
@@ -570,6 +570,19 @@ class HouseKeepingTest(TestCase):
 
         self.fridge_amenity = api_models.Amenity.objects.create(name="Fridge")
         self.king_size_bed = api_models.BedType.objects.create(name="King Size")
+
+        self.air_conditioner = api_models.Amenity.objects.create(
+            name="Air Conditioner"
+        )
+        self.last_room.amenities.add(self.fridge_amenity)
+    
+    def test_get_amenities(self):
+        url = reverse("amenities")
+        print(url)
+        query_params = {"room_number": self.last_room.room_number}  
+        response = self.client.get(path=url, data=query_params)
+        print(f"Response: {response.json()}")
+        self.assertEqual(response.status_code, 200)
 
     def test_house_keeping_assignment_url(self):
         self.assertEqual("/koms/house-keeping/assign/", reverse("assign_house_keeping"))

@@ -117,7 +117,7 @@ class Gender(BaseModel):
 
 class Profile(BaseModel):
     full_name = models.CharField(max_length=255)
-    user = models.ForeignKey(
+    user = models.OneToOneField(
         CustomUser, on_delete=models.CASCADE, related_name="profile"
     )
     department = models.ForeignKey(
@@ -174,13 +174,24 @@ class Shift(BaseModel):
         db_table = "workshift"
 
 
+class ShiftStatus(BaseModel):
+    name = models.CharField(max_length=255)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = "shiftstatus"
+
+
 class ProfileShiftAssign(BaseModel):
     department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True)
     profile = models.ForeignKey(
         Profile, on_delete=models.CASCADE, related_name="shifts"
     )
-    shift = models.ForeignKey(Shift, on_delete=models.CASCADE)
     date = models.DateField(default=timezone.now)
+    shift = models.ForeignKey(Shift, on_delete=models.CASCADE)
+    shift_end_time = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(
         Profile, on_delete=models.SET_NULL, null=True, related_name="created_shifts"
     )
@@ -189,6 +200,9 @@ class ProfileShiftAssign(BaseModel):
         Profile, on_delete=models.SET_NULL, null=True, related_name="modified_shifts"
     )
     date_modified = models.DateTimeField(auto_now=True)
+    status = models.ForeignKey(ShiftStatus, on_delete=models.SET_NULL, null=True)
+    time_started = models.DateTimeField(null=True, blank=True)
+    time_ended = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return f"{datetime.datetime.strftime(self.date, '%a %d %b %Y')} - {self.profile} - {self.shift}"
@@ -197,6 +211,37 @@ class ProfileShiftAssign(BaseModel):
         db_table = "profileshiftassign"
         verbose_name = "Shift Assignment"
         verbose_name_plural = "Shift Assignments"
+        ordering = ["-date"]
+
+
+class ShiftNote(BaseModel):
+    assigned_shift = models.OneToOneField(
+        ProfileShiftAssign, on_delete=models.CASCADE, related_name="shift_notes"
+    )
+    note = models.TextField()
+    note_date = models.DateField(default=timezone.now)
+    created_by = models.ForeignKey(
+        Profile,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="created_shift_notes",
+    )
+    last_modified_by = models.ForeignKey(
+        Profile,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="modified_shift_notes",
+    )
+    date_created = models.DateTimeField(auto_now_add=True)
+    date_modified = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.assigned_shift} - {self.date_created}"
+
+    class Meta:
+        db_table = "shiftnote"
+        verbose_name = "Shift Note"
+        verbose_name_plural = "Shift Notes"
 
 
 class HotelFloor(BaseModel):
@@ -322,7 +367,7 @@ class Room(BaseModel):
     room_booking_status = models.CharField(
         max_length=255, choices=choices.ROOM_BOOKING_STATUS_CHOICES, default="default"
     )
-    amenities = models.ManyToManyField(Amenity)
+    amenities = models.ManyToManyField(Amenity, related_name="rooms")
 
     def __str__(self):
         return self.room_number
@@ -390,6 +435,13 @@ class RoomKeepingAssign(BaseModel):
         null=True,
         related_name="room_keeping_duties",
     )
+    priority = models.ForeignKey(
+        "Priority",
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="room_assignments",
+    )
+    description = models.TextField(blank=True, null=True)
     created_by = models.ForeignKey(
         Profile,
         on_delete=models.SET_NULL,
@@ -401,6 +453,9 @@ class RoomKeepingAssign(BaseModel):
         on_delete=models.SET_NULL,
         null=True,
         related_name="modified_roomkeeping_assignments",
+    )
+    status = models.ForeignKey(
+        "HouseKeepingState", on_delete=models.SET_NULL, null=True
     )
     date_created = models.DateTimeField(auto_now_add=True)
     date_modified = models.DateTimeField(auto_now=True)
@@ -415,10 +470,7 @@ class RoomKeepingAssign(BaseModel):
 
 
 class HouseKeepingState(BaseModel):
-    # eg. waiting, used, assigned, cleaned, IP, faulty
-    # when assignments are first created, the have the waiting-to-assigned state
-    # when a user is checked in, the room state changes to ip-to-used
-    # after checkout, the room state changes to used-to-waiting
+    # options include: pending, ongoing, completed, faulty, request-for-help, confirm-completion
     name = models.CharField(max_length=255)
 
     def __str__(self):
@@ -430,48 +482,68 @@ class HouseKeepingState(BaseModel):
         verbose_name_plural = "House-Keeping States"
 
 
-class HouseKeepingStateTrans(BaseModel):
-    # eg. waiting-to-assigned, used-to-waiting, assigned-to-cleaned, cleaned-to-IP, IP-to-used, assigned_to_faulty
-    name = models.CharField(max_length=255, db_index=True)
-    initial_trans_state = models.ForeignKey(
-        HouseKeepingState, on_delete=models.CASCADE, related_name="initial_trans"
-    )
-    final_trans_state = models.ForeignKey(
-        HouseKeepingState, on_delete=models.CASCADE, related_name="final_trans"
-    )
-    note = models.CharField(max_length=255, blank=True, null=True)
-    created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
-    date_created = models.DateTimeField(auto_now_add=True)
+# class HouseKeepingStateTrans(BaseModel):
+#     # eg. waiting-to-assigned, used-to-waiting, assigned-to-cleaned, cleaned-to-IP, IP-to-used, assigned_to_faulty
+#     name = models.CharField(max_length=255, db_index=True)
+#     initial_trans_state = models.ForeignKey(
+#         HouseKeepingState, on_delete=models.CASCADE, related_name="initial_trans"
+#     )
+#     final_trans_state = models.ForeignKey(
+#         HouseKeepingState, on_delete=models.CASCADE, related_name="final_trans"
+#     )
+#     note = models.CharField(max_length=255, blank=True, null=True)
+#     created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
+#     date_created = models.DateTimeField(auto_now_add=True)
 
-    def __str__(self):
-        return f"{self.initial_trans_state} -> {self.final_trans_state}"
+#     def __str__(self):
+#         return f"{self.initial_trans_state} -> {self.final_trans_state}"
 
-    class Meta:
-        db_table = "housekeepingstatetrans"
-        verbose_name = "House-Keeping State Transfer"
-        verbose_name_plural = "House-Keeping State Transfers"
+#     class Meta:
+#         db_table = "housekeepingstatetrans"
+#         verbose_name = "House-Keeping State Transfer"
+#         verbose_name_plural = "House-Keeping State Transfers"
+
+
+# class ProcessRoomKeeping(BaseModel):
+#     room = models.ForeignKey(Room, on_delete=models.CASCADE)
+#     room_keeping_assign = models.ForeignKey(RoomKeepingAssign, on_delete=models.CASCADE)
+#     room_state_trans = models.ForeignKey(
+#         HouseKeepingStateTrans, on_delete=models.SET_NULL, null=True
+#     )
+#     date_processed = models.DateTimeField(default=timezone.now)
+#     shift = models.ForeignKey(Shift, on_delete=models.SET_NULL, null=True)
+#     created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
+#     date_created = models.DateTimeField(auto_now_add=True)
+#     note = models.CharField(max_length=255, blank=True, null=True)
+
+#     def __str__(self):
+#         # returns the final trans state of the room
+#         return f"{self.room} - {self.room_state_trans.final_trans_state.name}"
+
+#     class Meta:
+#         db_table = "processroomkeeping"
+#         verbose_name = "Room Keeping"
+#         verbose_name_plural = "Room Keepings"
 
 
 class ProcessRoomKeeping(BaseModel):
-    room = models.ForeignKey(Room, on_delete=models.CASCADE)
-    room_keeping_assign = models.ForeignKey(RoomKeepingAssign, on_delete=models.CASCADE)
-    room_state_trans = models.ForeignKey(
-        HouseKeepingStateTrans, on_delete=models.SET_NULL, null=True
+    room_number = models.CharField(max_length=255)
+    room_keeping_assign = models.ForeignKey(
+        RoomKeepingAssign,
+        on_delete=models.CASCADE,
+        related_name="room_keeping_processes",
     )
-    date_processed = models.DateTimeField(default=timezone.now)
-    shift = models.ForeignKey(Shift, on_delete=models.SET_NULL, null=True)
+    status = models.ForeignKey(HouseKeepingState, on_delete=models.SET_NULL, null=True)
     created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
     date_created = models.DateTimeField(auto_now_add=True)
-    note = models.CharField(max_length=255, blank=True, null=True)
 
     def __str__(self):
-        # returns the final trans state of the room
-        return f"{self.room} - {self.room_state_trans.final_trans_state.name}"
+        return f"{self.room_number} - {self.status}"
 
     class Meta:
         db_table = "processroomkeeping"
-        verbose_name = "Room Keeping"
-        verbose_name_plural = "Room Keepings"
+        verbose_name = "Process Room Keeping"
+        verbose_name_plural = "Process Room Keepings"
 
 
 class NameTitle(BaseModel):
@@ -820,7 +892,9 @@ class AssignComplaint(BaseModel):
         null=True,
         related_name="assigned_complaints",
     )
-    complaint_status = models.ForeignKey(ComplaintStatus, on_delete=models.SET_NULL, null=True)
+    complaint_status = models.ForeignKey(
+        ComplaintStatus, on_delete=models.SET_NULL, null=True
+    )
     updated_on = models.DateTimeField(null=True, blank=True)
     complaint_items = models.ManyToManyField(Amenity)
     priority = models.ForeignKey(Priority, on_delete=models.SET_NULL, null=True)

@@ -27,6 +27,7 @@ def check_user_shift(date, profile, shift_name: str) -> bool:
     returns True if a user has a shift on a particular day
     for example check if user_A has a morning shift on '2025-01-01'.
     '''
+    print(f'date: {date}, profile: {profile}, shift_name: {shift_name}')
     if not date:
         return False
     return models.ProfileShiftAssign.objects.filter(
