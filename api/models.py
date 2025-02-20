@@ -10,6 +10,7 @@ from utils.system_variables import PASSWORD_RESET
 from utils import defaults, choices
 from typing import Literal, Optional
 from rest_framework import serializers
+from django.db import transaction
 
 # Create your models here.
 
@@ -191,6 +192,7 @@ class ProfileShiftAssign(BaseModel):
     )
     date = models.DateField(default=timezone.now)
     shift = models.ForeignKey(Shift, on_delete=models.CASCADE)
+    shift_start_time = models.DateTimeField(null=True, blank=True)
     shift_end_time = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(
         Profile, on_delete=models.SET_NULL, null=True, related_name="created_shifts"
@@ -206,6 +208,13 @@ class ProfileShiftAssign(BaseModel):
 
     def __str__(self):
         return f"{datetime.datetime.strftime(self.date, '%a %d %b %Y')} - {self.profile} - {self.shift}"
+
+    @property
+    def is_ended(self):
+        return self.shift_end_time >= timezone.now()
+
+    def change_status(self, new_status):
+        self.status = ShiftStatus.objects.get(name=new_status)
 
     class Meta:
         db_table = "profileshiftassign"
@@ -425,9 +434,25 @@ class RoomStatus(BaseModel):
 
 class RoomKeepingAssign(BaseModel):
     room = models.ForeignKey(
-        Room, on_delete=models.CASCADE, related_name="maintenance_assignments"
+        Room,
+        on_delete=models.CASCADE,
+        db_index=True,
+        related_name="maintenance_assignments",
     )
-    shift = models.ForeignKey(Shift, on_delete=models.SET_NULL, null=True)
+    shift = models.ForeignKey(
+        Shift,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="room_keeping_assignments",
+    )
+    member_shift = models.ForeignKey(
+        ProfileShiftAssign,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_index=True,
+        related_name="room_keeping_assignments",
+    )
     assignment_date = models.DateField(default=timezone.now)
     assigned_to = models.ForeignKey(
         Profile,
@@ -454,19 +479,38 @@ class RoomKeepingAssign(BaseModel):
         null=True,
         related_name="modified_roomkeeping_assignments",
     )
-    status = models.ForeignKey(
-        "HouseKeepingState", on_delete=models.SET_NULL, null=True
+    status = models.ManyToManyField(
+        "HouseKeepingState", through="ProcessRoomKeeping", related_name="room_assignments"
     )
+    current_status = models.CharField(max_length=255, blank=True, null=True)
     date_created = models.DateTimeField(auto_now_add=True)
     date_modified = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"{self.assigned_to} - {self.shift} - [{self.room}]"
 
+    @property
+    def shift_period_ended(self):
+        return self.member_shift.shift_end_time <= timezone.now()
+
+    def change_status(self, new_status):
+        with transaction.atomic():
+            self.room_keeping_status_processes.create(
+                room_number=self.room.room_number,
+                status=HouseKeepingState.objects.get(name=new_status),
+                created_by=self.created_by,
+            )
+            self.current_status = new_status
+
+    # @property
+    # def current_status(self):
+    #     return self.room_keeping_status_processes.first().status.name
+
     class Meta:
         db_table = "roomkeepingassign"
         verbose_name = "Room Keeping Assignment"
         verbose_name_plural = "Room Keeping Assignments"
+        ordering = ["-date_created"]
 
 
 class HouseKeepingState(BaseModel):
@@ -481,6 +525,24 @@ class HouseKeepingState(BaseModel):
         verbose_name = "House-Keeping State"
         verbose_name_plural = "House-Keeping States"
 
+class ProcessRoomKeeping(BaseModel):
+    room_number = models.CharField(max_length=255)
+    room_keeping_assign = models.ForeignKey(
+        RoomKeepingAssign,
+        on_delete=models.CASCADE,
+        related_name="room_keeping_processes",
+    )
+    status = models.ForeignKey(HouseKeepingState, on_delete=models.SET_NULL, null=True)
+    created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
+    date_created = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.room_number} - {self.status}"
+
+    class Meta:
+        db_table = "processroomkeeping"
+        verbose_name = "Process Room Keeping"
+        verbose_name_plural = "Process Room Keepings"
 
 # class HouseKeepingStateTrans(BaseModel):
 #     # eg. waiting-to-assigned, used-to-waiting, assigned-to-cleaned, cleaned-to-IP, IP-to-used, assigned_to_faulty
@@ -526,12 +588,12 @@ class HouseKeepingState(BaseModel):
 #         verbose_name_plural = "Room Keepings"
 
 
-class ProcessRoomKeeping(BaseModel):
+class ProcessRoomKeeping2(BaseModel):
     room_number = models.CharField(max_length=255)
     room_keeping_assign = models.ForeignKey(
         RoomKeepingAssign,
         on_delete=models.CASCADE,
-        related_name="room_keeping_processes",
+        related_name="room_keeping_status_processes",
     )
     status = models.ForeignKey(HouseKeepingState, on_delete=models.SET_NULL, null=True)
     created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
@@ -541,10 +603,10 @@ class ProcessRoomKeeping(BaseModel):
         return f"{self.room_number} - {self.status}"
 
     class Meta:
-        db_table = "processroomkeeping"
+        db_table = "processroomkeeping2"
         verbose_name = "Process Room Keeping"
         verbose_name_plural = "Process Room Keepings"
-
+        ordering = ["-date_created"]
 
 class NameTitle(BaseModel):
     name = models.CharField(max_length=255)

@@ -71,6 +71,11 @@ urlpatterns = [
         views.RoomKeepingAssignUpdate.as_view(),
         name="edit_room_keeping_assign",
     ),
+    path(
+        "house-keeping/<uuid:pk>/change-status/",
+        views.UpdateRoomKeepingStatus.as_view(),
+        name="change_room_keeping_status",
+    ),
     # path(
     #     "house-keeping/process/",
     #     views.ProcessRoomKeeping.as_view(),

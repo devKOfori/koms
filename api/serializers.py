@@ -425,11 +425,13 @@ class ProfileShiftAssignSerializer(serializers.ModelSerializer):
             "profile",
             "shift",
             "date",
+            "shift_start_time",
+            "shift_end_time",
             "employee_name",
             "status",
             "shift_name",
         ]
-        read_only_fields = ["id"]
+        read_only_fields = ["id", "shift_start_time" "shift_end_time"]
 
     def get_employee_name(self, obj):
         return obj.profile.full_name if obj.profile else None
@@ -484,14 +486,19 @@ class ProfileShiftAssignSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
+        shift_start_time = datetime.combine(
+            validated_data.get("date"), validated_data.get("shift").start_time
+        )
         shift_end_time = datetime.combine(
             validated_data.get("date"), validated_data.get("shift").end_time
         )
+        print(f"shift_end_time: {shift_end_time}")
         created_by = self.context.get("created_by")
         department = created_by.department
         return models.ProfileShiftAssign.objects.create(
             department=department,
             created_by=created_by,
+            shift_start_time=shift_start_time,
             shift_end_time=shift_end_time,
             **validated_data,
         )
@@ -514,7 +521,15 @@ class MyShiftSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = models.ProfileShiftAssign
-        fields = ["id", "shift", "date", "status", "start_time", "end_time"]
+        fields = [
+            "id",
+            "shift",
+            "date",
+            "status",
+            "start_time",
+            "end_time",
+            "shift_end_time",
+        ]
         read_only_fields = ["id"]
 
     def get_start_time(self, obj):
@@ -592,15 +607,22 @@ class RoomKeepingAssignSerializer(serializers.ModelSerializer):
         slug_field="name", queryset=models.Shift.objects.all()
     )
     priority = serializers.SlugRelatedField(
-        slug_field="name", queryset=models.Priority.objects.all()
-    )
-    status = serializers.SlugRelatedField(
         slug_field="name",
-        queryset=models.HouseKeepingState.objects.all(),
+        queryset=models.Priority.objects.all(),
         allow_null=True,
         required=False,
     )
-    # assigned_to = serializers.SlugRelatedField(slug_field='assigned_to__username')
+    # status_ = serializers.SlugRelatedField(
+    #     slug_field="name",
+    #     queryset=models.HouseKeepingState.objects.all(),
+    #     allow_null=True,
+    #     required=False,
+    # )
+    status = serializers.SerializerMethodField(read_only=True)
+    created_by = serializers.SlugRelatedField(slug_field="full_name", read_only=True)
+    # assigned_to = serializers.SlugRelatedField(
+    #     slug_field="assigned_to__username", read_only=True
+    # )
 
     class Meta:
         model = models.RoomKeepingAssign
@@ -608,13 +630,19 @@ class RoomKeepingAssignSerializer(serializers.ModelSerializer):
             "id",
             "room",
             "shift",
+            "member_shift",
             "assignment_date",
             "assigned_to",
             "description",
             "priority",
             "status",
+            "created_by",
+            "current_status",
         ]
-        read_only_fields = ["id"]
+        read_only_fields = ["id", "created_by", "member_shift", "current_status"]
+
+    def get_status(self, obj):
+        return obj.room_keeping_status_processes.first().status.name
 
     def validate_assignment_date(self, data):
         if data < date.today():
@@ -628,6 +656,7 @@ class RoomKeepingAssignSerializer(serializers.ModelSerializer):
         created_by = self.context.get("created_by")
         shift = validated_data.get("shift")
         assignment_date = validated_data.get("assignment_date")
+        profile = validated_data.get("assigned_to")
         if not helpers.check_profile_department(created_by, "Housekeeping"):
             raise serializers.ValidationError(
                 {"error": "User must be in house keeping to complete this action"},
@@ -640,15 +669,27 @@ class RoomKeepingAssignSerializer(serializers.ModelSerializer):
             )
         if not helpers.check_user_shift(
             date=assignment_date,
-            profile=validated_data.get("assigned_to"),
+            profile=profile,
             shift_name=shift.name,
         ):
             raise serializers.ValidationError(
                 {"error": f"The user has no {shift.name} on {assignment_date}"}
             )
         with transaction.atomic():
+            member_shift = created_by.shifts.get(date=assignment_date, shift=shift)
             instance = models.RoomKeepingAssign.objects.create(
-                **validated_data, created_by=created_by
+                **validated_data,
+                created_by=created_by,
+                member_shift=member_shift,
+                current_status="Pending",
+            )
+
+            instance.room_keeping_status_processes.create(
+                room_number=instance.room.room_number,
+                room_keeping_assign=instance,
+                status=models.HouseKeepingState.objects.get(name="Pending"),
+                date_created=instance.date_created,
+                created_by=instance.created_by,
             )
 
             # Create default processroomkeeping record

@@ -10,7 +10,8 @@ from . import serializers as api_serializers
 from . import models
 from utils import helpers
 from rest_framework.decorators import api_view
-from datetime import datetime, timedelta
+from datetime import datetime
+from django.utils import timezone
 
 
 # Create your views here.
@@ -204,12 +205,16 @@ class ProfileShiftAssignList(generics.ListCreateAPIView):
         )
         shift_date = self.request.GET.get("shift_date", None)
         shift_name = self.request.GET.get("shift", None)
+        print(shift_name)
         exclude_inactive_shifts = self.request.GET.get("exclude_inactive_shifts", None)
         # department = self.request.GET.get("department", None)
+        print(queryset.count())
         if shift_date:
             queryset = queryset.filter(date=shift_date)
+            print(queryset.count())
         if shift_name:
             queryset = queryset.filter(shift__name=shift_name)
+            print(queryset.count())
         # if department:
         #     print(f"Department: {department}")
         #     queryset = queryset.filter(department__name=department)
@@ -332,7 +337,7 @@ class UpdateAssignedShiftStatus(APIView):
             )
         if (
             assigned_shift.shift_end_time
-            and assigned_shift.shift_end_time < datetime.now()
+            and assigned_shift.shift_end_time < timezone.now()
         ):
             return Response(
                 {"error": "this shift has already ended"},
@@ -353,6 +358,16 @@ class UpdateAssignedShiftStatus(APIView):
 class RoomKeepingAssignCreate(generics.ListCreateAPIView):
     queryset = models.RoomKeepingAssign.objects.all()
     serializer_class = api_serializers.RoomKeepingAssignSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        print(f"Queryset Total: {queryset.count()}")
+        shift_id = self.request.GET.get("shiftId", None)
+        print(f"Shift ID: {shift_id}")
+        if shift_id:
+            queryset = queryset.filter(member_shift=shift_id)
+            print(f"Queryset Total: {queryset.count()}")
+        return queryset
 
     def get_serializer_context(self):
         try:
@@ -384,21 +399,60 @@ class RoomKeepingAssignUpdate(generics.UpdateAPIView):
         return context
 
 
-# class ProcessRoomKeeping(generics.CreateAPIView):
-#     queryset = models.ProcessRoomKeeping.objects.all()
-#     serializer_class = api_serializers.ProcessRoomKeepingSerializer
+class UpdateRoomKeepingStatus(APIView):
+    def post(self, request, pk):
+        process_status = request.data.get("status")
+        print(process_status)
+        if not process_status:
+            return Response(
+                {"error": "status is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            room_keeping_assign = models.RoomKeepingAssign.objects.get(id=pk)
+            room_keeping_status = models.HouseKeepingState.objects.get(
+                name=process_status
+            )
+        except models.RoomKeepingAssign.DoesNotExist:
+            return Response(
+                {"error": "room keeping assign not found"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except models.HouseKeepingState.DoesNotExist:
+            return Response(
+                {"error": "room keeping status not found"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not room_keeping_assign.assigned_to == request.user.profile:
+            return Response(
+                {"error": "you are not authorized to update this room keeping status"},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+        if room_keeping_assign.current_status == process_status:
+            return Response(
+                {"error": "this room keeping task is already in this status"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if room_keeping_assign.shift_period_ended:
+            return Response(
+                {"error": "this shift has already ended"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not helpers.check_profile_role(
+            profile=request.user.profile, role_name="Supervisor"
+        ) and process_status not in ["Ongoing", "Ended", "Requested-for-Help"]:
+            return Response(
+                {
+                    "error": "only Started, Ended or Requested-for-Help status is allowed"
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        room_keeping_assign.change_status(process_status)
+        room_keeping_assign.last_modified_by = request.user.profile
+        room_keeping_assign.save()
 
-#     def get_serializer_context(self):
-#         try:
-#             profile = models.Profile.objects.get(user=self.request.user)
-#         except models.Profile.DoesNotExist:
-#             return Response(
-#                 {"error": "user profile does not exist"},
-#                 status=status.HTTP_400_BAD_REQUEST,
-#             )
-#         context = super().get_serializer_context()
-#         context["authored_by"] = profile
-#         return context
+        serializer = api_serializers.RoomKeepingAssignSerializer(room_keeping_assign)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class HouseKeepingTaskStaffList(APIView):
@@ -428,7 +482,7 @@ class HouseKeepingTaskStaffList(APIView):
         try:
             room = models.Room.objects.get(room_number=room_number)
             if shift:
-                shift = models.Shift.objects.get(id=shift)
+                shift = models.Shift.objects.get(name=shift)
                 room_keeping_staff_list = models.RoomKeepingAssign.objects.filter(
                     room=room, assignment_date=date, shift=shift
                 )
