@@ -612,17 +612,12 @@ class RoomKeepingAssignSerializer(serializers.ModelSerializer):
         allow_null=True,
         required=False,
     )
-    # status_ = serializers.SlugRelatedField(
-    #     slug_field="name",
-    #     queryset=models.HouseKeepingState.objects.all(),
-    #     allow_null=True,
-    #     required=False,
-    # )
     status = serializers.SerializerMethodField(read_only=True)
+    status_2 = serializers.BooleanField(write_only=True)
     created_by = serializers.SlugRelatedField(slug_field="full_name", read_only=True)
-    # assigned_to = serializers.SlugRelatedField(
-    #     slug_field="assigned_to__username", read_only=True
-    # )
+    task_supported = serializers.CharField(
+        max_length=255, required=False, write_only=True
+    )
 
     class Meta:
         model = models.RoomKeepingAssign
@@ -636,8 +631,10 @@ class RoomKeepingAssignSerializer(serializers.ModelSerializer):
             "description",
             "priority",
             "status",
+            "status_2",
             "created_by",
             "current_status",
+            "task_supported",
         ]
         read_only_fields = ["id", "created_by", "member_shift", "current_status"]
 
@@ -653,6 +650,11 @@ class RoomKeepingAssignSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         print(validated_data)
+        is_new_record = validated_data.pop("status_2", None)
+        task_supported = validated_data.pop("task_supported", None)
+        record_status = None
+        if is_new_record is not None:
+            record_status = "Pending" if is_new_record else "Reassigned"
         created_by = self.context.get("created_by")
         shift = validated_data.get("shift")
         assignment_date = validated_data.get("assignment_date")
@@ -676,43 +678,25 @@ class RoomKeepingAssignSerializer(serializers.ModelSerializer):
                 {"error": f"The user has no {shift.name} on {assignment_date}"}
             )
         with transaction.atomic():
+            if task_supported:
+                task_supported_obj = models.RoomKeepingAssign.objects.get(
+                    id=task_supported
+                )
+                task_supported_obj.change_status(
+                    "Support Assigned", created_by=created_by
+                )
+                task_supported_obj.save()
+
             member_shift = created_by.shifts.get(date=assignment_date, shift=shift)
             instance = models.RoomKeepingAssign.objects.create(
                 **validated_data,
                 created_by=created_by,
                 member_shift=member_shift,
-                current_status="Pending",
+                task_supported=task_supported,
             )
 
-            instance.room_keeping_status_processes.create(
-                room_number=instance.room.room_number,
-                room_keeping_assign=instance,
-                status=models.HouseKeepingState.objects.get(name="Pending"),
-                date_created=instance.date_created,
-                created_by=instance.created_by,
-            )
-
-            # Create default processroomkeeping record
-            models.ProcessRoomKeeping.objects.create(
-                room_number=instance.room.room_number,
-                room_keeping_assign=instance,
-                status=models.HouseKeepingState.objects.get(name="Pending"),
-                date_created=instance.date_created,
-                created_by=instance.created_by,
-            )
-
-            # Create default processroomkeeping record
-            # default_trans_state = models.HouseKeepingStateTrans.objects.get(
-            #     initial_trans_state__name__iexact="waiting",
-            #     final_trans_state__name__iexact="assigned",
-            # )
-            # models.ProcessRoomKeeping.objects.create(
-            #     room=instance.room,
-            #     room_keeping_assign=instance,
-            #     room_state_trans=default_trans_state,
-            #     date_processed=instance.date_created,
-            #     created_by=instance.created_by,
-            # )
+            instance.change_status("Pending", created_by=created_by)
+            instance.save()
         return instance
 
     def update(self, instance, validated_data):

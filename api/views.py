@@ -401,8 +401,9 @@ class RoomKeepingAssignUpdate(generics.UpdateAPIView):
 
 class UpdateRoomKeepingStatus(APIView):
     def post(self, request, pk):
+        print(request.user.profile)
         process_status = request.data.get("status")
-        print(process_status)
+        print(f"process_status {process_status}")
         if not process_status:
             return Response(
                 {"error": "status is required"},
@@ -410,6 +411,8 @@ class UpdateRoomKeepingStatus(APIView):
             )
         try:
             room_keeping_assign = models.RoomKeepingAssign.objects.get(id=pk)
+            print(f"Room Keeping Assign Profile: {room_keeping_assign.assigned_to}")
+            print(f"current status {room_keeping_assign.current_status}")
             room_keeping_status = models.HouseKeepingState.objects.get(
                 name=process_status
             )
@@ -440,14 +443,36 @@ class UpdateRoomKeepingStatus(APIView):
             )
         if not helpers.check_profile_role(
             profile=request.user.profile, role_name="Supervisor"
-        ) and process_status not in ["Ongoing", "Ended", "Requested-for-Help"]:
+        ) and process_status not in ["Ongoing", "Ended", "Request Help"]:
             return Response(
                 {
                     "error": "only Started, Ended or Requested-for-Help status is allowed"
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        room_keeping_assign.change_status(process_status)
+        if room_keeping_assign.current_status == "Ended" and process_status in [
+            "Request Help",
+            "Ongoing",
+        ]:
+            return Response(
+                {"error": "this room keeping task has already ended"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not room_keeping_assign.is_started and not process_status == "Ongoing":
+            if not helpers.check_profile_role(
+                profile=request.user.profile, role_name="Supervisor"
+            ):
+                return Response(
+                    {"error": "This task has not been started yet"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            else:
+                if process_status not in ["Reassigned", "Cancelled"]:
+                    return Response(
+                        {"error": "This task has not been started yet"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+        room_keeping_assign.change_status(process_status, request.user.profile)
         room_keeping_assign.last_modified_by = request.user.profile
         room_keeping_assign.save()
 

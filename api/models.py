@@ -485,7 +485,7 @@ class RoomKeepingAssign(BaseModel):
     current_status = models.CharField(max_length=255, blank=True, null=True)
     date_created = models.DateTimeField(auto_now_add=True)
     date_modified = models.DateTimeField(auto_now=True)
-
+    task_supported = models.CharField(max_length=255, blank=True, null=True)
     def __str__(self):
         return f"{self.assigned_to} - {self.shift} - [{self.room}]"
 
@@ -493,18 +493,22 @@ class RoomKeepingAssign(BaseModel):
     def shift_period_ended(self):
         return self.member_shift.shift_end_time <= timezone.now()
 
-    def change_status(self, new_status):
+    def change_status(self, new_status, created_by):
         with transaction.atomic():
             self.room_keeping_status_processes.create(
                 room_number=self.room.room_number,
                 status=HouseKeepingState.objects.get(name=new_status),
-                created_by=self.created_by,
+                created_by=created_by,
             )
             self.current_status = new_status
 
     # @property
     # def current_status(self):
     #     return self.room_keeping_status_processes.first().status.name
+
+    @property
+    def is_started(self):
+        return self.room_keeping_status_processes.filter(status__name="ongoing").exists()
 
     class Meta:
         db_table = "roomkeepingassign"
