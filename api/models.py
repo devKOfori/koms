@@ -466,6 +466,7 @@ class RoomKeepingAssign(BaseModel):
         null=True,
         related_name="room_assignments",
     )
+    title = models.CharField(max_length=255, blank=True, null=True)
     description = models.TextField(blank=True, null=True)
     created_by = models.ForeignKey(
         Profile,
