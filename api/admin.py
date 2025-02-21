@@ -1,5 +1,6 @@
 from django.contrib import admin
 from . import models
+from django_celery_beat.models import PeriodicTask, IntervalSchedule, CrontabSchedule
 
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
@@ -117,3 +118,6 @@ admin.site.register(models.BedType)
 admin.site.register(models.ShiftStatus)
 admin.site.register(models.ShiftNote)
 admin.site.register(models.Priority)
+# admin.site.register(CrontabSchedule)
+# admin.site.register(IntervalSchedule)
+# admin.site.register(PeriodicTask)

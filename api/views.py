@@ -438,40 +438,55 @@ class UpdateRoomKeepingStatus(APIView):
             )
         if room_keeping_assign.shift_period_ended:
             return Response(
-                {"error": "this shift has already ended"},
+                {"error": "this shift period has expired"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        if not helpers.check_profile_role(
-            profile=request.user.profile, role_name="Supervisor"
-        ) and process_status not in ["Ongoing", "Ended", "Request Help"]:
+        if not request.user.profile.has_role("Supervisor") and (
+            process_status
+            not in [
+                "Ongoing",
+                "Ended",
+                "Request Help",
+            ]
+            # not in models.HouseKeepingState.objects.filter(
+            #     allow_only_managers=False
+            # ).values_list("name", flat=True)
+        ):
             return Response(
                 {
                     "error": "only Started, Ended or Requested-for-Help status is allowed"
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        if room_keeping_assign.current_status == "Ended" and process_status in [
+        # if room_keeping_assign.current_status == "Ended" and (process_status in models.HouseKeepingState.objects.filter(allow_after_task_is_ended=False).values_list("name", flat=True)):
+        if room_keeping_assign.current_status == "Ended" and (process_status in [
             "Request Help",
             "Ongoing",
-        ]:
+        ]):
             return Response(
                 {"error": "this room keeping task has already ended"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if not room_keeping_assign.is_started and not process_status == "Ongoing":
-            if not helpers.check_profile_role(
-                profile=request.user.profile, role_name="Supervisor"
+            # if not helpers.check_profile_role(
+            #     profile=request.user.profile, role_name="Supervisor"
+            # ):
+            if not request.user.profile.has_role("Supervisor"):
+                return Response(
+                    {"error": "This task has not been started yet"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if request.user.profile.has_role("Supervisor") and (
+                process_status
+                not in [
+                    "Reassigned",
+                    "Cancelled",
+                ]
             ):
                 return Response(
                     {"error": "This task has not been started yet"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            else:
-                if process_status not in ["Reassigned", "Cancelled"]:
-                    return Response(
-                        {"error": "This task has not been started yet"},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
         room_keeping_assign.change_status(process_status, request.user.profile)
         room_keeping_assign.last_modified_by = request.user.profile
         room_keeping_assign.save()

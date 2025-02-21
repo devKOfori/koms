@@ -628,6 +628,7 @@ class RoomKeepingAssignSerializer(serializers.ModelSerializer):
             "member_shift",
             "assignment_date",
             "assigned_to",
+            "title",
             "description",
             "priority",
             "status",
@@ -659,21 +660,24 @@ class RoomKeepingAssignSerializer(serializers.ModelSerializer):
         shift = validated_data.get("shift")
         assignment_date = validated_data.get("assignment_date")
         profile = validated_data.get("assigned_to")
-        if not helpers.check_profile_department(created_by, "Housekeeping"):
+        # if not helpers.check_profile_department(created_by, "Housekeeping"):
+        if not created_by.is_member_of("Housekeeping"):
             raise serializers.ValidationError(
                 {"error": "User must be in house keeping to complete this action"},
                 code=status.HTTP_400_BAD_REQUEST,
             )
-        if not helpers.check_profile_role(created_by, "Supervisor"):
+        # if not helpers.check_profile_role(created_by, "Supervisor"):
+        if not created_by.has_role("Supervisor"):
             raise serializers.ValidationError(
                 {"error": "Only supervisors of housekeeping can complete this action"},
                 code=status.HTTP_400_BAD_REQUEST,
             )
-        if not helpers.check_user_shift(
-            date=assignment_date,
-            profile=profile,
-            shift_name=shift.name,
-        ):
+        # if not helpers.check_user_shift(
+        #     date=assignment_date,
+        #     profile=profile,
+        #     shift_name=shift.name,
+        # ):
+        if not profile.has_shift(assignment_date, shift.name):
             raise serializers.ValidationError(
                 {"error": f"The user has no {shift.name} on {assignment_date}"}
             )
@@ -709,115 +713,6 @@ class RoomKeepingAssignSerializer(serializers.ModelSerializer):
         instance.last_modified_by = modified_by
         instance.save()
         return instance
-
-    # class ProcessRoomKeepingSerializer(serializers.ModelSerializer):
-    #     room_state_trans = serializers.SlugRelatedField(
-    #         slug_field="name",
-    #         queryset=models.HouseKeepingStateTrans.objects.all(),
-    #     )
-    #     shift = serializers.SlugRelatedField(slug_field="name", read_only=True)
-    #     # shift = serializers.SlugRelatedField(
-    #     #     slug_field="name", queryset=models.Shift.objects.all(), read_only=True
-    #     # )
-    #     room = serializers.SlugRelatedField(slug_field="room_number", read_only=True)
-    #     # room = serializers.SlugRelatedField(
-    #     #     slug_field="room_number", queryset=models.Room.objects.all(), read_only=True
-    #     # )
-
-    # class Meta:
-    #     model = models.ProcessRoomKeeping
-    #     fields = [
-    #         "id",
-    #         "room_keeping_assign",
-    #         "room",
-    #         "room_state_trans",
-    #         "date_processed",
-    #         "shift",
-    #         "note",
-    #         "created_by",
-    #     ]
-    #     read_only_fields = [
-    #         "id",
-    #         "shift",
-    #         "created_by",
-    #         "room",
-    #     ]
-
-    # def validate(self, attrs):
-    #     user_profile = self.context.get("authored_by")
-    #     if not helpers.check_profile_department(
-    #         profile=user_profile,
-    #         department_name=system_variables.DEPARTMENT_NAMES.get("house_keeping"),
-    #     ):
-    #         raise serializers.ValidationError(
-    #             {
-    #                 "error": "only staff of housekeeping department can complete this action"
-    #             }
-    #         )
-
-    #     # faulty rooms requires that notes are added
-    #     room_state_trans = attrs.get("room_state_trans")
-    #     final_trans_state = room_state_trans.final_trans_state
-    #     if (
-    #         final_trans_state
-    #         and str(final_trans_state.name).casefold() == "faulty"
-    #         and not attrs.get("note")
-    #     ):
-    #         raise serializers.ValidationError(
-    #             {"error": "you are required to add some notes for faulty rooms"}
-    #         )
-
-    #     # only supervisors can set IP state
-    #     # print(f'supervisor account? {helpers.check_profile_role(
-    #     #         profile=user_profile,
-    #     #         role_name=system_variables.ROLE_NAMES.get("supervisor"),
-    #     #     )}')
-    #     # print(f'User profile dept: {user_profile.roles.all()}')
-    #     if (
-    #         final_trans_state
-    #         and str(final_trans_state.name).casefold() == "ip"
-    #         and not helpers.check_profile_role(
-    #             profile=user_profile,
-    #             role_name=system_variables.ROLE_NAMES.get("supervisor"),
-    #         )
-    #     ):
-    #         raise serializers.ValidationError(
-    #             {"error": "only supervisors can set state to IP"}
-    #         )
-
-    #     # shift has not been assigned to you
-    #     room_keeping_assign = attrs.get("room_keeping_assign")
-    #     if user_profile != room_keeping_assign.assigned_to:
-    #         # print(f'assigned_to and user_profile {attrs.get('assigned_to')}  {user_profile}')
-    #         raise serializers.ValidationError(
-    #             {"error": "Task has not been assigned to you"}
-    #         )
-    #     return attrs
-
-    # def create(self, validated_data):
-    #     user_profile = self.context.get("authored_by")
-    #     room_keeping_assign = validated_data.get("room_keeping_assign")
-    #     shift = room_keeping_assign.shift
-    #     room: models.Room = room_keeping_assign.room
-    #     room_state_trans = validated_data.get("room_state_trans")
-    #     with transaction.atomic():
-    #         instance = models.ProcessRoomKeeping.objects.create(
-    #             room=room,
-    #             room_keeping_assign=room_keeping_assign,
-    #             room_state_trans=room_state_trans,
-    #             date_processed=validated_data.get("date_processed"),
-    #             shift=shift,
-    #             created_by=user_profile,
-    #         )
-    #         if room_state_trans.name == "cleaned-to-ip":
-    #             # print(f'room status before {room.room_status}')
-    #             # print('changing room status...')
-    #             room.change_room_maintenance_status("cleaned")
-    #             # print('room status changed...')
-    #             room.save()
-    #             # print(f'room status after {room.room_status}')
-    #     return instance
-
 
 class NameTitleSerializer(serializers.ModelSerializer):
     class Meta:
@@ -974,9 +869,10 @@ class BookingSerializer(serializers.ModelSerializer):
         created_by = self.context["authored_by"]
 
         # this condition prevents all users who are not in frontdesk department from creating bookings
-        if not helpers.check_profile_department(
-            profile=created_by, department_name="frontdesk"
-        ):
+        # if not helpers.check_profile_department(
+        #     profile=created_by, department_name="frontdesk"
+        # ):
+        if not created_by.is_member_of("Frontdesk"):
             raise serializers.ValidationError(
                 {"error": "only frontdesk staff are authorized to complete this action"}
             )
@@ -1051,9 +947,10 @@ class BookingSerializer(serializers.ModelSerializer):
         client = instance.client
 
         # this condition prevents all users who are not in frontdesk department from updating bookings
-        if not helpers.check_profile_department(
-            profile=modified_by, department_name="frontdesk"
-        ):
+        # if not helpers.check_profile_department(
+        #     profile=modified_by, department_name="frontdesk"
+        # ):
+        if not modified_by.is_member_of("Frontdesk"):
             raise serializers.ValidationError(
                 {"error": "only frontdesk staff are authorized to complete this action"}
             )
@@ -1118,15 +1015,17 @@ class AmenitySerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         created_by = self.context.get("authored_by")
-        if not helpers.check_profile_department(
-            profile=created_by, department_name="Housekeeping"
-        ):
+        # if not helpers.check_profile_department(
+        #     profile=created_by, department_name="Housekeeping"
+        # ):
+        if not created_by.is_member_of("Housekeeping"):
             raise serializers.ValidationError(
                 {
                     "error": "only house keeping staff are authorized to complete this action"
                 }
             )
-        if not helpers.check_profile_role(profile=created_by, role_name="Supervisor"):
+        # if not helpers.check_profile_role(profile=created_by, role_name="Supervisor"):
+        if not created_by.has_role("Supervisor"):
             raise serializers.ValidationError(
                 {
                     "error": "only supervisors in house keeping are authorized to complete this action"
@@ -1136,15 +1035,17 @@ class AmenitySerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         modified_by = self.context.get("authored_by")
-        if not helpers.check_profile_department(
-            profile=modified_by, department_name="Housekeeping"
-        ):
+        # if not helpers.check_profile_department(
+        #     profile=modified_by, department_name="Housekeeping"
+        # ):
+        if not modified_by.is_member_of("Housekeeping"):
             raise serializers.ValidationError(
                 {
                     "error": "only house keeping staff are authorized to complete this action"
                 }
             )
-        if not helpers.check_profile_role(profile=modified_by, role_name="Supervisor"):
+        # if not helpers.check_profile_role(profile=modified_by, role_name="Supervisor"):
+        if not modified_by.has_role("Supervisor"):
             raise serializers.ValidationError(
                 {
                     "error": "only supervisors in house keeping are authorized to complete this action"
@@ -1173,15 +1074,17 @@ class RoomCategorySerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         created_by = self.context.get("authored_by")
-        if not helpers.check_profile_department(
-            profile=created_by, department_name="housekeeping"
-        ):
+        # if not helpers.check_profile_department(
+        #     profile=created_by, department_name="housekeeping"
+        # ):
+        if not created_by.is_member_of("Housekeeping"):
             raise serializers.ValidationError(
                 {
                     "error": "only house keeping staff are authorized to complete this action"
                 }
             )
-        if not helpers.check_profile_role(profile=created_by, role_name="Supervisor"):
+        # if not helpers.check_profile_role(profile=created_by, role_name="Supervisor"):
+        if not created_by.has_role("Supervisor"):
             raise serializers.ValidationError(
                 {
                     "error": "only supervisors in house keeping are authorized to complete this action"
@@ -1197,15 +1100,17 @@ class RoomCategorySerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         modified_by = self.context.get("authored_by")
-        if not helpers.check_profile_department(
-            profile=modified_by, department_name="housekeeping"
-        ):
+        # if not helpers.check_profile_department(
+        #     profile=modified_by, department_name="housekeeping"
+        # ):
+        if not modified_by.is_member_of("Housekeeping"):
             raise serializers.ValidationError(
                 {
                     "error": "only house keeping staff are authorized to complete this action"
                 }
             )
-        if not helpers.check_profile_role(profile=modified_by, role_name="Supervisor"):
+        # if not helpers.check_profile_role(profile=modified_by, role_name="Supervisor"):
+        if not modified_by.has_role("Supervisor"):
             raise serializers.ValidationError(
                 {
                     "error": "only supervisors in house keeping are authorized to complete this action"
@@ -1264,9 +1169,10 @@ class RoomTypeSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         created_by = self.context.get("authored_by")
         room_category = validated_data.get("room_category")
-        if not helpers.check_profile_department(
-            profile=created_by, department_name="Housekeeping"
-        ):
+        # if not helpers.check_profile_department(
+        #     profile=created_by, department_name="Housekeeping"
+        # ):
+        if not created_by.is_member_of("Housekeeping"):
             raise serializers.ValidationError(
                 {
                     "error": "only house keeping staff are authorized to complete this action"
@@ -1288,15 +1194,17 @@ class RoomTypeSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         modified_by = self.context.get("authored_by")
-        if not helpers.check_profile_department(
-            profile=modified_by, department_name="Housekeeping"
-        ):
+        # if not helpers.check_profile_department(
+        #     profile=modified_by, department_name="Housekeeping"
+        # ):
+        if not modified_by.is_member_of("Housekeeping"):
             raise serializers.ValidationError(
                 {
                     "error": "only house keeping staff are authorized to complete this action"
                 }
             )
-        if not helpers.check_profile_role(profile=modified_by, role_name="Supervisor"):
+        # if not helpers.check_profile_role(profile=modified_by, role_name="Supervisor"):
+        if not modified_by.has_role("Supervisor"):
             raise serializers.ValidationError(
                 {
                     "error": "only supervisors in house keeping are authorized to complete this action"
@@ -1384,15 +1292,17 @@ class RoomSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         created_by = self.context.get("authored_by")
-        if not helpers.check_profile_department(
-            profile=created_by, department_name="Housekeeping"
-        ):
+        # if not helpers.check_profile_department(
+        #     profile=created_by, department_name="Housekeeping"
+        # ):
+        if not created_by.is_member_of("Housekeeping"):
             raise serializers.ValidationError(
                 {
                     "error": "only house keeping staff are authorized to complete this action"
                 }
             )
-        if not helpers.check_profile_role(profile=created_by, role_name="Supervisor"):
+        # if not helpers.check_profile_role(profile=created_by, role_name="Supervisor"):
+        if not created_by.has_role("Supervisor"):
             raise serializers.ValidationError(
                 {
                     "error": "only supervisors in house keeping are authorized to complete this action"
@@ -1425,15 +1335,17 @@ class RoomSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         modified_by = self.context.get("authored_by")
-        if not helpers.check_profile_department(
-            profile=modified_by, department_name="Housekeeping"
-        ):
+        # if not helpers.check_profile_department(
+        #     profile=modified_by, department_name="Housekeeping"
+        # ):
+        if not modified_by.is_member_of("Housekeeping"):
             raise serializers.ValidationError(
                 {
                     "error": "only house keeping staff are authorized to complete this action"
                 }
             )
-        if not helpers.check_profile_role(profile=modified_by, role_name="Supervisor"):
+        # if not helpers.check_profile_role(profile=modified_by, role_name="Supervisor"):
+        if not modified_by.has_role("Supervisor"):
             raise serializers.ValidationError(
                 {
                     "error": "only supervisors in house keeping are authorized to complete this action"
@@ -1494,13 +1406,15 @@ class AssignComplaintSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         created_by = self.context.get("authored_by")
-        if not helpers.check_profile_department(
-            profile=created_by, department_name="frontdesk"
-        ):
+        # if not helpers.check_profile_department(
+        #     profile=created_by, department_name="frontdesk"
+        # ):
+        if not created_by.is_member_of("Frontdesk"):
             raise serializers.ValidationError(
                 {"error": "only frontdesk staff are authorized to complete this action"}
             )
-        if not helpers.check_profile_role(profile=created_by, role_name="Supervisor"):
+        # if not helpers.check_profile_role(profile=created_by, role_name="Supervisor"):
+        if not created_by.has_role("Supervisor"):
             raise serializers.ValidationError(
                 {
                     "error": "only supervisors in frontdesk are authorized to complete this action"

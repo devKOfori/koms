@@ -141,6 +141,15 @@ class Profile(BaseModel):
     def __str__(self):
         return self.full_name
 
+    def is_member_of(self, department_name: str) -> bool:
+        return self.department.name == department_name
+
+    def has_role(self, role_name: str) -> bool:
+        return self.profile_roles.filter(name__iexact=role_name).exists()
+    
+    def has_shift(self, date, shift_name: str) -> bool:
+        return self.shifts.filter(date=date, shift__name__iexact=shift_name).exists()
+
     class Meta:
         db_table = "profile"
 
@@ -481,12 +490,15 @@ class RoomKeepingAssign(BaseModel):
         related_name="modified_roomkeeping_assignments",
     )
     status = models.ManyToManyField(
-        "HouseKeepingState", through="ProcessRoomKeeping", related_name="room_assignments"
+        "HouseKeepingState",
+        through="ProcessRoomKeeping",
+        related_name="room_assignments",
     )
     current_status = models.CharField(max_length=255, blank=True, null=True)
     date_created = models.DateTimeField(auto_now_add=True)
     date_modified = models.DateTimeField(auto_now=True)
     task_supported = models.CharField(max_length=255, blank=True, null=True)
+
     def __str__(self):
         return f"{self.assigned_to} - {self.shift} - [{self.room}]"
 
@@ -494,7 +506,7 @@ class RoomKeepingAssign(BaseModel):
     def shift_period_ended(self):
         return self.member_shift.shift_end_time <= timezone.now()
 
-    def change_status(self, new_status, created_by):
+    def change_status(self, new_status, created_by=None):
         with transaction.atomic():
             self.room_keeping_status_processes.create(
                 room_number=self.room.room_number,
@@ -509,7 +521,9 @@ class RoomKeepingAssign(BaseModel):
 
     @property
     def is_started(self):
-        return self.room_keeping_status_processes.filter(status__name="ongoing").exists()
+        return self.room_keeping_status_processes.filter(
+            status__name="ongoing"
+        ).exists()
 
     class Meta:
         db_table = "roomkeepingassign"
@@ -521,6 +535,11 @@ class RoomKeepingAssign(BaseModel):
 class HouseKeepingState(BaseModel):
     # options include: pending, ongoing, completed, faulty, request-for-help, confirm-completion
     name = models.CharField(max_length=255)
+    allow_only_managers = models.BooleanField(default=False, null=True, blank=True)
+    set_to_unfinished_after_task_expiry = models.BooleanField(
+        default=False, null=True, blank=True
+    )
+    allow_after_task_is_ended = models.BooleanField(default=False, null=True, blank=True)
 
     def __str__(self):
         return self.name
@@ -529,6 +548,7 @@ class HouseKeepingState(BaseModel):
         db_table = "housekeepingstate"
         verbose_name = "House-Keeping State"
         verbose_name_plural = "House-Keeping States"
+
 
 class ProcessRoomKeeping(BaseModel):
     room_number = models.CharField(max_length=255)
@@ -548,6 +568,7 @@ class ProcessRoomKeeping(BaseModel):
         db_table = "processroomkeeping"
         verbose_name = "Process Room Keeping"
         verbose_name_plural = "Process Room Keepings"
+
 
 # class HouseKeepingStateTrans(BaseModel):
 #     # eg. waiting-to-assigned, used-to-waiting, assigned-to-cleaned, cleaned-to-IP, IP-to-used, assigned_to_faulty
@@ -612,6 +633,7 @@ class ProcessRoomKeeping2(BaseModel):
         verbose_name = "Process Room Keeping"
         verbose_name_plural = "Process Room Keepings"
         ordering = ["-date_created"]
+
 
 class NameTitle(BaseModel):
     name = models.CharField(max_length=255)
