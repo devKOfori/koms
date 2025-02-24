@@ -365,10 +365,13 @@ class RoomKeepingAssignCreate(generics.ListCreateAPIView):
         queryset = super().get_queryset()
         print(f"Queryset Total: {queryset.count()}")
         shift_id = self.request.GET.get("shiftId", None)
+        employee_name = self.request.GET.get("employeeName", None)
         print(f"Shift ID: {shift_id}")
         if shift_id:
             queryset = queryset.filter(member_shift=shift_id)
             print(f"Queryset Total: {queryset.count()}")
+        if employee_name:
+            queryset = queryset.filter(assigned_to__full_name__icontains=employee_name)
         return queryset
 
     def get_serializer_context(self):
@@ -444,6 +447,11 @@ class UpdateRoomKeepingStatus(APIView):
         ):
             return Response(
                 {"error": "the shift period has expired or shift is ended"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if room_keeping_assign.member_shift.status.name == "Started":
+            return Response(
+                {"error": "the shift has not started yet"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if not request.user.profile.has_role("Supervisor") and (
