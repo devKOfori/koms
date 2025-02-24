@@ -186,6 +186,7 @@ class Shift(BaseModel):
 
 class ShiftStatus(BaseModel):
     name = models.CharField(max_length=255)
+    change_after_expiry = models.BooleanField(default=False, null=True, blank=True)
 
     def __str__(self):
         return self.name
@@ -522,7 +523,7 @@ class RoomKeepingAssign(BaseModel):
     @property
     def is_started(self):
         return self.room_keeping_status_processes.filter(
-            status__name="ongoing"
+            status__name__iexact="ongoing"
         ).exists()
 
     class Meta:

@@ -205,22 +205,24 @@ class ProfileShiftAssignList(generics.ListCreateAPIView):
         )
         shift_date = self.request.GET.get("shift_date", None)
         shift_name = self.request.GET.get("shift", None)
-        print(shift_name)
-        exclude_inactive_shifts = self.request.GET.get("exclude_inactive_shifts", None)
+        # print(shift_name)
+        exclude_inactive_shifts = self.request.GET.get("exclude_inactive_shifts", False)
+        # print(f"Exclude Inactive Shifts: {type(exclude_inactive_shifts)}")
         # department = self.request.GET.get("department", None)
-        print(queryset.count())
+        # print(queryset.count())
         if shift_date:
             queryset = queryset.filter(date=shift_date)
             print(queryset.count())
         if shift_name:
             queryset = queryset.filter(shift__name=shift_name)
-            print(queryset.count())
+            # print(queryset.count())
         # if department:
         #     print(f"Department: {department}")
         #     queryset = queryset.filter(department__name=department)
-        if exclude_inactive_shifts:
+        if exclude_inactive_shifts and exclude_inactive_shifts == "true":
             queryset = queryset.exclude(status__name__in=["Ended", "Cancelled"])
-        print(queryset.count())
+        # print(queryset.count())
+        # print(queryset)
         return queryset
 
 
@@ -308,7 +310,7 @@ def update_assigned_shift_status(request, pk):
 class UpdateAssignedShiftStatus(APIView):
     def post(self, request, pk):
         process_status = request.data.get("status")
-        if not status:
+        if not process_status:
             return Response(
                 {"error": "status is required"},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -436,9 +438,12 @@ class UpdateRoomKeepingStatus(APIView):
                 {"error": "this room keeping task is already in this status"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        if room_keeping_assign.shift_period_ended:
+        if (
+            room_keeping_assign.shift_period_ended
+            or room_keeping_assign.member_shift.status.name == "Ended"
+        ):
             return Response(
-                {"error": "this shift period has expired"},
+                {"error": "the shift period has expired or shift is ended"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if not request.user.profile.has_role("Supervisor") and (
@@ -459,14 +464,18 @@ class UpdateRoomKeepingStatus(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         # if room_keeping_assign.current_status == "Ended" and (process_status in models.HouseKeepingState.objects.filter(allow_after_task_is_ended=False).values_list("name", flat=True)):
-        if room_keeping_assign.current_status == "Ended" and (process_status in [
-            "Request Help",
-            "Ongoing",
-        ]):
+        if room_keeping_assign.current_status == "Ended" and (
+            process_status
+            in [
+                "Request Help",
+                "Ongoing",
+            ]
+        ):
             return Response(
                 {"error": "this room keeping task has already ended"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        print(f"is started: {room_keeping_assign.is_started}")
         if not room_keeping_assign.is_started and not process_status == "Ongoing":
             # if not helpers.check_profile_role(
             #     profile=request.user.profile, role_name="Supervisor"

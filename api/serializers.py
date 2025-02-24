@@ -618,6 +618,7 @@ class RoomKeepingAssignSerializer(serializers.ModelSerializer):
     task_supported = serializers.CharField(
         max_length=255, required=False, write_only=True
     )
+    profile_name = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = models.RoomKeepingAssign
@@ -636,18 +637,23 @@ class RoomKeepingAssignSerializer(serializers.ModelSerializer):
             "created_by",
             "current_status",
             "task_supported",
+            "profile_name",
         ]
         read_only_fields = ["id", "created_by", "member_shift", "current_status"]
 
     def get_status(self, obj):
         return obj.room_keeping_status_processes.first().status.name
 
+    def get_profile_name(self, obj):
+        return obj.assigned_to.full_name if obj.assigned_to else None
+   
     def validate_assignment_date(self, data):
         if data < date.today():
             raise serializers.ValidationError(
                 {"error": "Room Keeping Assignments cannot be saved for past dates"}
             )
         return data
+
 
     def create(self, validated_data):
         print(validated_data)
