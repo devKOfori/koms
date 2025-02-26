@@ -8,6 +8,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from . import serializers as api_serializers
 from . import models
+from django.db.models import Q
 from utils import helpers
 from rest_framework.decorators import api_view
 from datetime import datetime
@@ -366,12 +367,35 @@ class RoomKeepingAssignCreate(generics.ListCreateAPIView):
         print(f"Queryset Total: {queryset.count()}")
         shift_id = self.request.GET.get("shiftId", None)
         employee_name = self.request.GET.get("employeeName", None)
+        room_number = self.request.GET.get("roomNumber", None)
+        current_status = self.request.GET.get("status", None)
+        priority = self.request.GET.get("priority", None)
+        assigned_on = self.request.GET.get("assignedOn", None)
         print(f"Shift ID: {shift_id}")
+        print(f"Employee Name: {employee_name}")
+        print(f"Room Number: {room_number}")
+        print(f"Current Status: {current_status}")
+        print(f"Priority: {priority}")
+        print(f"Assigned On: {assigned_on}")
         if shift_id:
-            queryset = queryset.filter(member_shift=shift_id)
+            queryset = queryset.filter(Q(member_shift=shift_id) | Q(shift=shift_id))
             print(f"Queryset Total: {queryset.count()}")
         if employee_name:
-            queryset = queryset.filter(assigned_to__full_name__icontains=employee_name)
+            queryset = queryset.filter(
+                Q(assigned_to__full_name__icontains=employee_name)
+            )
+        if room_number:
+            queryset = queryset.filter(room__room_number__iexact=room_number)
+            print(f"Queryset Total after room #: {queryset.count()}")
+        if current_status:
+            queryset = queryset.filter(current_status=current_status)
+            print(f"Queryset Total after current status: {queryset.count()}")
+        if priority:
+            queryset = queryset.filter(priority__name=priority)
+            print(f"Queryset Total after priority: {queryset.count()}")
+        if assigned_on:
+            queryset = queryset.filter(assignment_date=assigned_on)
+            print(f"Queryset Total after assigned on: {queryset.count()}")
         return queryset
 
     def get_serializer_context(self):
