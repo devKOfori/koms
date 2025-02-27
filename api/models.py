@@ -146,7 +146,7 @@ class Profile(BaseModel):
 
     def has_role(self, role_name: str) -> bool:
         return self.profile_roles.filter(name__iexact=role_name).exists()
-    
+
     def has_shift(self, date, shift_name: str) -> bool:
         return self.shifts.filter(date=date, shift__name__iexact=shift_name).exists()
 
@@ -540,7 +540,9 @@ class HouseKeepingState(BaseModel):
     set_to_unfinished_after_task_expiry = models.BooleanField(
         default=False, null=True, blank=True
     )
-    allow_after_task_is_ended = models.BooleanField(default=False, null=True, blank=True)
+    allow_after_task_is_ended = models.BooleanField(
+        default=False, null=True, blank=True
+    )
 
     def __str__(self):
         return self.name
@@ -648,7 +650,8 @@ class NameTitle(BaseModel):
         verbose_name_plural = "Titles"
 
 
-class Client(BaseModel):
+class Guest(BaseModel):
+    guest_id = models.CharField(max_length=255, db_index=True)
     title = models.ForeignKey(
         NameTitle, on_delete=models.SET_NULL, null=True, blank=True
     )
@@ -659,9 +662,12 @@ class Client(BaseModel):
     email = models.EmailField(max_length=255, blank=True, null=True)
     phone_number = models.CharField(max_length=20, blank=True, null=True)
     address = models.CharField(max_length=255, blank=True, null=True)
-    national_id = models.CharField(max_length=255, blank=True, null=True)
+    identification_number = models.CharField(max_length=255, blank=True, null=True)
     emergency_contact_name = models.CharField(max_length=255, blank=True, null=True)
     emergency_contact_phone = models.CharField(max_length=255, blank=True, null=True)
+    loyalty_program = models.ManyToManyField(
+        "LoyaltyProgram", through="GuestLoyaltyPrograms", related_name="Guests"
+    )
 
     def __str__(self):
         return (
@@ -671,7 +677,7 @@ class Client(BaseModel):
         )
 
     class Meta:
-        db_table = "client"
+        db_table = "Guest"
 
 
 # DEFAULT_PAYMENT_TYPE = defaults.get_table_default('paymenttype')
@@ -763,54 +769,48 @@ class Receipt(BaseModel):
 
 
 class Booking(BaseModel):
-    # Client-related fields
-    client = models.ForeignKey(Client, on_delete=models.SET_NULL, null=True, blank=True)
-    title = models.ForeignKey(
-        NameTitle, on_delete=models.SET_NULL, null=True, blank=True
-    )
-    first_name = models.CharField(max_length=255)
-    last_name = models.CharField(max_length=255)
+    # Guest-related fields
+    guest = models.ForeignKey(Guest, on_delete=models.SET_NULL, null=True, blank=True)
+    guest_name = models.CharField(max_length=255, blank=True, null=True)
     # gender = models.CharField(max_length=255, choices=choices.GENDER_CHOICES)
-    gender = models.ForeignKey(Gender, on_delete=models.SET_NULL, null=True, blank=True)
+    gender = models.CharField(max_length=12, null=True, blank=True)
     email = models.EmailField(max_length=255, blank=True, null=True)
     phone_number = models.CharField(max_length=20, blank=True, null=True)
-    address = models.CharField(max_length=255, blank=True, null=True)
-    employee_id = models.CharField(max_length=255, blank=True, null=True)
-    group_id = models.CharField(max_length=255, blank=True, null=True)
-    national_id = models.CharField(max_length=255, blank=True, null=True)
-    emergency_contact_name = models.CharField(max_length=255, blank=True, null=True)
-    emergency_contact_phone = models.CharField(max_length=255, blank=True, null=True)
 
     # Room-related fields
-    room_category = models.ForeignKey(
-        RoomCategory, on_delete=models.SET_NULL, null=True
-    )
-    room_type = models.ForeignKey(RoomType, on_delete=models.SET_NULL, null=True)
-    room = models.ForeignKey(Room, on_delete=models.SET_NULL, null=True)
     room_number = models.CharField(max_length=255, blank=True, null=True, db_index=True)
+    room = models.ForeignKey(
+        Room, on_delete=models.SET_NULL, null=True, related_name="bookings"
+    )
+    room_category = models.ForeignKey(
+        RoomCategory, on_delete=models.SET_NULL, null=True, related_name="bookings"
+    )
+    room_type = models.ForeignKey(
+        RoomType, on_delete=models.SET_NULL, null=True, related_name="bookings"
+    )
 
     # Booking-related fields
     booking_code = models.CharField(
         max_length=255, blank=True, null=True
-    )  # this field is used in authenticating client complaints and requests
-    check_in = models.DateTimeField(default=timezone.now)
-    check_out = models.DateTimeField(default=timezone.now)
+    )  # this field is used in authenticating Guest complaints and requests
+    vip_status = models.ForeignKey("VIPStatus", on_delete=models.SET_NULL, null=True)
+    check_in_date = models.DateTimeField(default=timezone.now)
+    check_out_date = models.DateTimeField(default=timezone.now)
     number_of_guests = models.PositiveIntegerField(default=1)
     number_of_older_guests = models.PositiveIntegerField(default=1)
-    number_of_younger_guests = models.PositiveIntegerField(default=0)
-    rate_type = models.CharField(
-        max_length=255, choices=choices.RATE_TYPE_CHOICES, default="non-member"
+    number_of_younger_guests = models.PositiveIntegerField(
+        default=0, blank=True, null=True
+    )
+    arrival_mode = models.ForeignKey(
+        "ArrivalMode", on_delete=models.SET_NULL, null=True
     )
     rate = models.DecimalField(max_digits=11, decimal_places=2, default=0.00)
     promo_code = models.CharField(max_length=255, blank=True, null=True)
 
-    # Sponsor and payment information
-    sponsor_type = models.ForeignKey(
-        SponsorType, on_delete=models.SET_NULL, null=True, blank=True
-    )
-    sponsor = models.ForeignKey(Sponsor, on_delete=models.SET_NULL, null=True)
-    payment_type = models.ForeignKey(
-        PaymentType, on_delete=models.SET_NULL, null=True, blank=True
+    # payment information
+    amount_paid = models.DecimalField(max_digits=11, decimal_places=2, default=0.00)
+    payment_status = models.ForeignKey(
+        "PaymentStatus", on_delete=models.SET_NULL, null=True
     )
     receipt = models.ForeignKey(
         Receipt, on_delete=models.SET_NULL, null=True, blank=True
@@ -832,7 +832,6 @@ class Booking(BaseModel):
         blank=True,
         related_name="bookings_modified",
     )
-    checked_out = models.BooleanField(default=False)
 
     def __str__(self):
         return
@@ -849,7 +848,7 @@ class Booking(BaseModel):
 
     def checkout(self):
         """
-        Check out the client from the room.
+        Check out the Guest from the room.
         Parameters:
         None
         Returns:
@@ -861,11 +860,110 @@ class Booking(BaseModel):
         db_table = "booking"
 
 
+class ArrivalMode(BaseModel):
+    name = models.CharField(max_length=255)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = "arrivalmode"
+        verbose_name = "Arrival Mode"
+        verbose_name_plural = "Arrival Modes"
+
+
+class VIPStatus(BaseModel):
+    name = models.CharField(max_length=255)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = "vipstatus"
+        verbose_name = "VIP Status"
+        verbose_name_plural = "VIP Statuses"
+
+
+class LoyaltyProgram(BaseModel):
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+    created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
+    date_created = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = "loyaltyprogram"
+        verbose_name = "Loyalty Program"
+        verbose_name_plural = "Loyalty Programs"
+
+
+class GuestLoyaltyPrograms(BaseModel):
+    guest = models.ForeignKey(
+        Guest, on_delete=models.CASCADE, related_name="loyalty_programs"
+    )
+    loyalty_program = models.ForeignKey(LoyaltyProgram, on_delete=models.CASCADE)
+    date_enrolled = models.DateTimeField(default=timezone.now)
+    created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
+    date_created = models.DateTimeField(auto_now_add=True)
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"{self.guest} - {self.loyalty_program}"
+
+    class Meta:
+        db_table = "Guestloyaltyprograms"
+        verbose_name = "Guest Loyalty Program"
+        verbose_name_plural = "Guest Loyalty Programs"
+
+
+class Checkin(BaseModel):
+    booking_code = models.CharField(max_length=255)
+    guest = models.ForeignKey(
+        Guest, on_delete=models.SET_NULL, null=True, blank=True, related_name="checkins"
+    )
+    guest_name = models.CharField(max_length=255)
+    gender = models.CharField(max_length=12, null=True, blank=True)
+    email = models.EmailField(max_length=255, blank=True, null=True)
+    phone_number = models.CharField(max_length=20, blank=True, null=True)
+    room = models.ForeignKey(
+        Room, on_delete=models.SET_NULL, null=True, related_name="checkins"
+    )
+    room_number = models.CharField(max_length=255, db_index=True)
+    room_category = models.ForeignKey(
+        RoomCategory, on_delete=models.SET_NULL, null=True
+    )
+    room_type = models.ForeignKey(RoomType, on_delete=models.SET_NULL, null=True)
+    check_in_date = models.DateTimeField(default=timezone.now)
+    number_of_older_guests = models.PositiveIntegerField(default=1)
+    number_of_younger_guests = models.PositiveIntegerField(
+        default=0, blank=True, null=True
+    )
+    number_of_guests = models.PositiveIntegerField(default=1)
+    sponsor = models.ForeignKey(Sponsor, on_delete=models.SET_NULL, null=True)
+    sponsor_name = models.CharField(max_length=255, blank=True, null=True)
+    payment_type = models.ForeignKey(
+        PaymentType, on_delete=models.SET_NULL, null=True, blank=True
+    )
+    security_deposit = models.DecimalField(
+        max_digits=11, decimal_places=2, default=0.00, null=True
+    )
+    receipt = models.ForeignKey(
+        Receipt, on_delete=models.SET_NULL, null=True, blank=True
+    )
+    booking_payment_id = models.CharField(
+        max_length=255, blank=True, null=True
+    )  # field to store payment id for guests who have made payment for their booking
+    check_out_date = models.DateTimeField(default=timezone.now)
+    checked_out = models.BooleanField(default=False)
+
+
 class Checkout(BaseModel):
     booking = models.OneToOneField(
         Booking, on_delete=models.CASCADE, related_name="checkout"
     )
-    client = models.ForeignKey(Client, on_delete=models.SET_NULL, null=True)
+    guest = models.ForeignKey(Guest, on_delete=models.SET_NULL, null=True)
     room_number = models.CharField(max_length=255, blank=True, null=True)
     first_name = models.CharField(max_length=255)
     last_name = models.CharField(max_length=255)
@@ -881,7 +979,7 @@ class Checkout(BaseModel):
     date_created = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.booking} - {self.client}"
+        return f"{self.booking} - {self.guest}"
 
     class Meta:
         db_table = "checkout"
@@ -929,7 +1027,7 @@ class Hashtag(BaseModel):
 
 
 class Complaint(BaseModel):
-    client = models.CharField(max_length=255)
+    guest = models.CharField(max_length=255)
     room_number = models.ForeignKey(Room, on_delete=models.SET_NULL, null=True)
     title = models.CharField(max_length=255, null=True, blank=True)
     message = models.TextField()
@@ -949,7 +1047,7 @@ class Complaint(BaseModel):
     hashtags = models.ManyToManyField(Hashtag)
 
     def __str__(self):
-        return f"{self.client} - {self.room_number}"
+        return f"{self.guest} - {self.room_number}"
 
     class Meta:
         db_table = "complaint"
@@ -961,7 +1059,7 @@ class AssignComplaint(BaseModel):
     complaint = models.ForeignKey(
         Complaint, on_delete=models.CASCADE, related_name="assigned_complaints"
     )
-    client = models.CharField(max_length=255)
+    guest = models.CharField(max_length=255)
     room_number = models.CharField(max_length=255)
     title = models.CharField(max_length=255, null=True, blank=True)
     message = models.TextField()
@@ -1035,3 +1133,23 @@ class ProcessComplaint(BaseModel):
         db_table = "processcomplaint"
         verbose_name = "Process Complaint"
         verbose_name_plural = "Process Complaints"
+
+
+class SponsorClaims(BaseModel):
+    sponsor = models.ForeignKey(Sponsor, on_delete=models.SET_NULL, null=True)
+    guest = models.ForeignKey(Guest, on_delete=models.SET_NULL, null=True)
+    guest_name = models.CharField(max_length=255, blank=True, null=True)
+    guest_department = models.CharField(max_length=255)
+    guest_employment_id = models.CharField(max_length=255)
+
+    def __str__(self):
+        return f"{self.sponsor} - {self.guest}"
+
+    class Meta:
+        db_table = "sponsorclaims"
+        verbose_name = "Sponsor Claim"
+        verbose_name_plural = "Sponsor Claims"
+
+
+class PaymentStatus(BaseModel):
+    name = models.CharField(max_length=255, db_index=True)

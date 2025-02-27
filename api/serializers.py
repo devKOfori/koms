@@ -646,14 +646,13 @@ class RoomKeepingAssignSerializer(serializers.ModelSerializer):
 
     def get_profile_name(self, obj):
         return obj.assigned_to.full_name if obj.assigned_to else None
-   
+
     def validate_assignment_date(self, data):
         if data < date.today():
             raise serializers.ValidationError(
                 {"error": "Room Keeping Assignments cannot be saved for past dates"}
             )
         return data
-
 
     def create(self, validated_data):
         print(validated_data)
@@ -720,34 +719,11 @@ class RoomKeepingAssignSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
 
+
 class NameTitleSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.NameTitle
         fields = ["name"]
-
-
-class ClientSerializer(serializers.ModelSerializer):
-    title = serializers.SlugRelatedField(
-        slug_field="name", queryset=models.NameTitle.objects.all()
-    )
-    gender = serializers.SlugRelatedField(
-        slug_field="name", queryset=models.Gender.objects.all()
-    )
-
-    class Meta:
-        model = models.Client
-        fields = [
-            "id",
-            "title",
-            "first_name",
-            "last_name",
-            "gender",
-            "email",
-            "phone_number",
-            "address",
-            "national_id",
-        ]
-        read_only_fields = ["id"]
 
 
 class PaymentTypeSerializer(serializers.ModelSerializer):
@@ -769,6 +745,127 @@ class SponsorSerializer(serializers.ModelSerializer):
         model = models.Sponsor
         fields = ["id", "name", "email", "phone_number", "address", "fax"]
         read_only_fields = ["id"]
+
+
+class GuestSerializer(serializers.ModelSerializer):
+    title = serializers.SlugRelatedField(
+        slug_field="name", queryset=models.NameTitle.objects.all()
+    )
+    gender = serializers.SlugRelatedField(
+        slug_field="name", queryset=models.Gender.objects.all()
+    )
+    
+
+    class Meta:
+        model = models.Guest
+        fields = [
+            "id",
+            "guest_id",
+            "title",
+            "first_name",
+            "last_name",
+            "gender",
+            "email",
+            "phone_number",
+            "address",
+            "identification_number",
+            "emergency_contact_name",
+            "emergency_contact_phone",
+        ]
+        read_only_fields = ["id", "guest_id"]
+
+    def create(self, validated_data):
+        guest_id = generators.generate_guest_id()
+        guest = models.Guest.objects.create(guest_id=guest_id, **validated_data)
+        return guest
+
+
+class BookingSerializer(serializers.ModelSerializer):
+    guest = GuestSerializer(write_only=True)
+    payment_status = serializers.SlugRelatedField(
+        slug_field="name", queryset=models.PaymentStatus.objects.all()
+    )
+    room_category = serializers.SlugRelatedField(
+        slug_field="name", queryset=models.RoomCategory.objects.all()
+    )
+    room_type = serializers.SlugRelatedField(
+        slug_field="name", queryset=models.RoomType.objects.all()
+    )
+
+    class Meta:
+        model = models.Booking
+        fields = [
+            "id",
+            "guest",
+            "guest_name",
+            "email",
+            "phone_number",
+            "room_category",
+            "room_type",
+            "room_number",
+            "booking_code",
+            "check_in_date",
+            "check_out_date",
+            "number_of_older_guests",
+            "number_of_younger_guests",
+            "number_of_guests",
+            "rate",
+            "promo_code",
+            "vip_status",
+            "sponsor",
+            "payment_status",
+            "created_by",
+        ]
+        read_only_fields = [
+            "id",
+            "room_number",
+            "booking_code",
+            "client_name",
+            "email",
+            "phone_number",
+            "created_by",
+        ]
+
+    def validate_check_in_date(self, data):
+        if data < datetime.now():
+            raise serializers.ValidationError(
+                {"error": "Check-in date cannot be in the past"}
+            )
+        return data
+
+    def validate_check_out_date(self, data):
+        if data < datetime.now():
+            raise serializers.ValidationError(
+                {"error": "Check-out date cannot be in the past"}
+            )
+        return data
+
+    def validate(self, attrs):
+        check_in_date = attrs.get("check_in_date")
+        check_out_date = attrs.get("check_out_date")
+        if check_in_date >= check_out_date:
+            raise serializers.ValidationError(
+                {"error": "Check-out date must be later than check-in date"}
+            )
+        return attrs
+
+    def create(self, validated_data):
+        creator = self.context.get("created_by")
+        guest_data = validated_data.pop("guest")
+        with transaction.atomic():
+            guest = models.Guest.objects.create(**guest_data)
+            booking = models.Booking.objects.create(
+                guest=guest,
+                guest_name=f"{guest.first_name} {guest.last_name}",
+                booking_code=generators.generate_booking_code(),
+                email=guest.email,
+                phone_number=guest.phone_number,
+                number_of_guests=validated_data.get("number_of_older_guests", 0)
+                + validated_data.get("number_of_younger_guests", 0),
+                created_by=creator,
+                **validated_data,
+            )
+            return booking
 
 
 class BookingSerializer(serializers.ModelSerializer):
@@ -902,7 +999,7 @@ class BookingSerializer(serializers.ModelSerializer):
 
         with transaction.atomic():
             # Create client account
-            client = models.Client.objects.create(**client_data)
+            client = models.Guest.objects.create(**client_data)
 
             # Room-related data
             room: models.Room = validated_data.pop("room")

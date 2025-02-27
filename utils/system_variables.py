@@ -18,3 +18,8 @@ DEPARTMENT_NAMES ={
 ROLE_NAMES = {
     'supervisor': 'Supervisor',
 }
+
+SYSTEM_PREFIX = {
+    'booking': 'B',
+    'guest': 'G',
+}

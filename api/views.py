@@ -364,13 +364,16 @@ class RoomKeepingAssignCreate(generics.ListCreateAPIView):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+
         print(f"Queryset Total: {queryset.count()}")
         shift_id = self.request.GET.get("shiftId", None)
         employee_name = self.request.GET.get("employeeName", None)
+        shift_name = self.request.GET.get("shiftName", None)
         room_number = self.request.GET.get("roomNumber", None)
         current_status = self.request.GET.get("status", None)
         priority = self.request.GET.get("priority", None)
         assigned_on = self.request.GET.get("assignedOn", None)
+        user_tasks_only = self.request.GET.get("userTasksOnly", None)
         print(f"Shift ID: {shift_id}")
         print(f"Employee Name: {employee_name}")
         print(f"Room Number: {room_number}")
@@ -378,12 +381,15 @@ class RoomKeepingAssignCreate(generics.ListCreateAPIView):
         print(f"Priority: {priority}")
         print(f"Assigned On: {assigned_on}")
         if shift_id:
-            queryset = queryset.filter(Q(member_shift=shift_id) | Q(shift=shift_id))
+            queryset = queryset.filter(member_shift=shift_id)
             print(f"Queryset Total: {queryset.count()}")
         if employee_name:
             queryset = queryset.filter(
                 Q(assigned_to__full_name__icontains=employee_name)
             )
+        if shift_name:
+            queryset = queryset.filter(shift__name=shift_name)
+            print(f"Queryset Total after shift name: {queryset.count()}")
         if room_number:
             queryset = queryset.filter(room__room_number__iexact=room_number)
             print(f"Queryset Total after room #: {queryset.count()}")
@@ -396,6 +402,9 @@ class RoomKeepingAssignCreate(generics.ListCreateAPIView):
         if assigned_on:
             queryset = queryset.filter(assignment_date=assigned_on)
             print(f"Queryset Total after assigned on: {queryset.count()}")
+        if user_tasks_only:
+            queryset = queryset.filter(assigned_to=self.request.user.profile)
+            print(f"Queryset Total after user tasks only: {queryset.count()}")
         return queryset
 
     def get_serializer_context(self):
@@ -1036,3 +1045,31 @@ class RoomAmenityList(APIView):
 class PriorityList(generics.ListCreateAPIView):
     queryset = models.Priority.objects.all()
     serializer_class = api_serializers.PrioritySerializer
+
+
+class GuestList(generics.ListCreateAPIView):
+    queryset = models.Guest.objects.all()
+    serializer_class = api_serializers.GuestSerializer
+
+    def get_serializer_context(self):
+        try:
+            user_profile = self.request.user.profile
+        except models.Profile.DoesNotExist:
+            return Response(
+                {"error": "User not authenticated"}, status=status.HTTP_400_BAD_REQUEST
+            )
+        context = super().get_serializer_context()
+        context["created_by"] = user_profile
+        return context
+
+
+class GuestDetails(generics.RetrieveUpdateDestroyAPIView):
+    queryset = models.Guest.objects.all()
+    serializer_class = api_serializers.GuestSerializer
+    lookup_url_kwarg = "guest_id"
+
+    def get_object(self):
+        obj = self.get_serializer().Meta.model.objects.get(
+            guest_id=self.kwargs.get("guest_id")
+        )
+        return obj
