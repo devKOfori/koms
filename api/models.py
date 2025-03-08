@@ -651,7 +651,7 @@ class NameTitle(BaseModel):
 
 
 class Guest(BaseModel):
-    guest_id = models.CharField(max_length=255, db_index=True)
+    guest_id = models.CharField(max_length=255, db_index=True, unique=True)
     title = models.ForeignKey(
         NameTitle, on_delete=models.SET_NULL, null=True, blank=True
     )
