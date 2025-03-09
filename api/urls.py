@@ -165,6 +165,7 @@ urlpatterns = [
     path("priorities/", views.PriorityList.as_view(), name="priorities"),
 
     # urls for guests management
+    path("titles/", views.NameTitleList.as_view(), name="titles"),
     path("guests/", views.GuestList.as_view(), name="guests"),
     path("guests/<str:guest_id>/", views.GuestDetails.as_view(), name="guest_details"),
 ]

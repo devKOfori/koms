@@ -1073,3 +1073,7 @@ class GuestDetails(generics.RetrieveUpdateDestroyAPIView):
             guest_id=self.kwargs.get("guest_id")
         )
         return obj
+
+class NameTitleList(generics.ListCreateAPIView):
+    queryset = models.NameTitle.objects.all()
+    serializer_class = api_serializers.NameTitleSerializer

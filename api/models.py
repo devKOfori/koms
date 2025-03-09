@@ -650,6 +650,31 @@ class NameTitle(BaseModel):
         verbose_name_plural = "Titles"
 
 
+class IdentificationType(BaseModel):
+    name = models.CharField(max_length=255)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = "identificationtype"
+        verbose_name = "Identification Type"
+        verbose_name_plural = "Identification Types"
+
+class Country(BaseModel):
+    name = models.CharField(max_length=255)
+    country_code = models.CharField(max_length=255, blank=True, null=True)
+    abbr = models.CharField(max_length=255, blank=True, null=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = "country"
+        verbose_name = "Country"
+        verbose_name_plural = "Countries"
+
+
 class Guest(BaseModel):
     guest_id = models.CharField(max_length=255, db_index=True, unique=True)
     title = models.ForeignKey(
@@ -662,11 +687,15 @@ class Guest(BaseModel):
     email = models.EmailField(max_length=255, blank=True, null=True)
     phone_number = models.CharField(max_length=20, blank=True, null=True)
     address = models.CharField(max_length=255, blank=True, null=True)
+    identification_type = models.ForeignKey(
+        IdentificationType, on_delete=models.SET_NULL, null=True, blank=True
+    )
     identification_number = models.CharField(max_length=255, blank=True, null=True)
+    country = models.ForeignKey(Country, on_delete=models.SET_NULL, null=True, blank=True)
     emergency_contact_name = models.CharField(max_length=255, blank=True, null=True)
     emergency_contact_phone = models.CharField(max_length=255, blank=True, null=True)
-    loyalty_program = models.ManyToManyField(
-        "LoyaltyProgram", through="GuestLoyaltyPrograms", related_name="Guests"
+    loyalty_programs = models.ManyToManyField(
+        "LoyaltyProgram", through="GuestLoyaltyPrograms", related_name="guests"
     )
 
     def __str__(self):
@@ -901,7 +930,7 @@ class LoyaltyProgram(BaseModel):
 
 class GuestLoyaltyPrograms(BaseModel):
     guest = models.ForeignKey(
-        Guest, on_delete=models.CASCADE, related_name="loyalty_programs"
+        Guest, on_delete=models.CASCADE, related_name="my_loyalty_programs"
     )
     loyalty_program = models.ForeignKey(LoyaltyProgram, on_delete=models.CASCADE)
     date_enrolled = models.DateTimeField(default=timezone.now)
@@ -1152,4 +1181,10 @@ class SponsorClaims(BaseModel):
 
 
 class PaymentStatus(BaseModel):
+    # eg. pending, full-payment, part-payment
     name = models.CharField(max_length=255, db_index=True)
+
+    class Meta:
+        db_table = "paymentstatus"
+        verbose_name = "Payment Status"
+        verbose_name_plural = "Payment Statuses"
