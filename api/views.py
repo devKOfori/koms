@@ -13,6 +13,7 @@ from utils import helpers
 from rest_framework.decorators import api_view
 from datetime import datetime
 from django.utils import timezone
+from rest_framework_simplejwt.views import TokenBlacklistView
 
 
 # Create your views here.
@@ -42,27 +43,8 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = api_serializers.CustomTokenObtainPairSerializer
 
 
-class LogoutView(APIView):
-    def post(self, request):
-        refresh_token = request.data.get("refresh_token")
-        if not refresh_token:
-            return Response(
-                {"error": "Refresh token is required for logout."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            token = RefreshToken(refresh_token)
-            token.blacklist()
-            return Response(
-                {"detail": "Logout Successfull."}, status=status.HTTP_205_RESET_CONTENT
-            )
-        except Exception as e:
-            return Response(
-                {"error": "Invalid or malformed refresh token"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
+class LogoutView(TokenBlacklistView):
+    _serializer_class = api_serializers.TokenBlacklistSerializer
 
 class PasswordChangeView(APIView):
     def post(self, request):

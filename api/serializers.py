@@ -8,7 +8,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from datetime import timedelta, date, datetime
 from utils import generators, system_variables, notifications, helpers, choices
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenBlacklistSerializer
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -46,6 +46,11 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                 data[roles] = []
 
         return data
+
+class CustomTokenBlacklistSerializer(TokenBlacklistSerializer):
+    def validate(self, attrs):
+        data = super().validate(attrs=attrs)
+        print(data)
 
 
 class CustomUserSerializer(serializers.ModelSerializer):
