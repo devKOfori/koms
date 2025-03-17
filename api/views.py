@@ -601,11 +601,20 @@ class HouseKeepingTaskStaffList(APIView):
         print(room_keeping_staff_list)
 
         return Response(room_keeping_staff_list, status=status.HTTP_200_OK)
+    
+
+class GenderList(generics.ListCreateAPIView):
+    queryset = models.Gender.objects.all()
+    serializer_class = api_serializers.GenderSerializer
 
 
 class BookingList(generics.ListCreateAPIView):
     queryset = models.Booking.objects.all()
     serializer_class = api_serializers.BookingSerializer
+
+class CountryList(generics.ListCreateAPIView):
+    queryset = models.Country.objects.all()
+    serializer_class = api_serializers.CountrySerializer
 
     def get_serializer_context(self):
         try:

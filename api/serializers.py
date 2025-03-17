@@ -36,9 +36,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             data["profile_id"] = profile.id
 
             department_name = (
-                getattr(user.profile.department, "name")
-                if hasattr(user.profile, "department")
-                else "unknown"
+                getattr(user.profile.department, "name", "unknown")
             )
             data["department"] = department_name
             if hasattr(user.profile, "roles"):
@@ -746,6 +744,13 @@ class SponsorSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Sponsor
         fields = ["id", "name", "email", "phone_number", "address", "fax"]
+        read_only_fields = ["id"]
+
+
+class CountrySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.Country
+        fields = ["id", "name", "country_code", "abbr"]
         read_only_fields = ["id"]
 
 
