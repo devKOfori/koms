@@ -844,6 +844,7 @@ class Booking(BaseModel):
     receipt = models.ForeignKey(
         Receipt, on_delete=models.SET_NULL, null=True, blank=True
     )
+    note = models.TextField(blank=True, null=True)
 
     date_created = models.DateTimeField(default=timezone.now, blank=True, null=True)
     date_modified = models.DateTimeField(default=timezone.now, blank=True, null=True)
