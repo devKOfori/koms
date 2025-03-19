@@ -49,8 +49,8 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
 class CustomTokenBlacklistSerializer(TokenBlacklistSerializer):
     def validate(self, attrs):
+        print(attrs)
         data = super().validate(attrs=attrs)
-        print(data)
 
 
 class CustomUserSerializer(serializers.ModelSerializer):

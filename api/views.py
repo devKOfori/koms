@@ -44,7 +44,45 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 
 
 class LogoutView(TokenBlacklistView):
-    _serializer_class = api_serializers.TokenBlacklistSerializer
+    serializer_class = api_serializers.TokenBlacklistSerializer
+
+class LogoutView2(APIView):
+    def post(self, request):
+        print("Raw request data:", request.body)  # Check raw request body
+        print("Parsed request data:", request.data)  # Debugging
+
+        try:
+            refresh = request.data.get("refresh")
+            token = RefreshToken(refresh)
+            print(token)
+            token.blacklist()
+            return Response(
+                {"detail": "refresh token blacklisted"},
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            return Response(
+                {"error": "an error occured while blacklisting the refresh token"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+class LogoutView3(APIView):
+    def post(self, request):
+        refresh_token = request.data.get("refresh")
+        if refresh_token:
+            print(refresh_token)
+            try:
+                # token = RefreshToken(refresh_token)
+                # token.blacklist()
+                return Response(
+                    {"detail": "refresh token blacklisted"},
+                    status=status.HTTP_200_OK,
+                )
+            except Exception as e:
+                return Response(
+                    {"error": "an error occured while blacklisting the refresh token"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
 class PasswordChangeView(APIView):
     def post(self, request):
