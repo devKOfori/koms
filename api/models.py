@@ -949,7 +949,7 @@ class GuestLoyaltyPrograms(BaseModel):
 
 
 class Checkin(BaseModel):
-    booking_code = models.CharField(max_length=255)
+    booking_code = models.CharField(max_length=255, db_index=True)
     guest = models.ForeignKey(
         Guest, on_delete=models.SET_NULL, null=True, blank=True, related_name="checkins"
     )
@@ -970,17 +970,14 @@ class Checkin(BaseModel):
     number_of_younger_guests = models.PositiveIntegerField(
         default=0, blank=True, null=True
     )
-    number_of_guests = models.PositiveIntegerField(default=1)
+    number_of_guests = models.PositiveIntegerField(default=1, blank=True, null=True)
     sponsor = models.ForeignKey(Sponsor, on_delete=models.SET_NULL, null=True)
     sponsor_name = models.CharField(max_length=255, blank=True, null=True)
     payment_type = models.ForeignKey(
         PaymentType, on_delete=models.SET_NULL, null=True, blank=True
     )
-    security_deposit = models.DecimalField(
+    total_payment = models.DecimalField(
         max_digits=11, decimal_places=2, default=0.00, null=True
-    )
-    receipt = models.ForeignKey(
-        Receipt, on_delete=models.SET_NULL, null=True, blank=True
     )
     booking_payment_id = models.CharField(
         max_length=255, blank=True, null=True
@@ -988,6 +985,24 @@ class Checkin(BaseModel):
     check_out_date = models.DateTimeField(default=timezone.now)
     checked_out = models.BooleanField(default=False)
 
+    class Meta:
+        db_table="checkin"
+        verbose_name="Check-In"
+        verbose_name_plural = "Check-Ins"
+
+class CheckinPayment(BaseModel):
+    check_in = models.ForeignKey(Checkin, on_delete=models.DO_NOTHING)
+    amount = models.DecimalField(max_digits=11, decimal_places=2, default=0.00)
+    receipt = models.ForeignKey(
+        Receipt, on_delete=models.SET_NULL, null=True, blank=True
+    )
+    payment_timestamp = models.DateTimeField(default=timezone.now)
+    received_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True, blank=True)
+
+    class Meta:
+        db_table = "checkinpayment"
+        verbose_name = "Check-In Payment"
+        verbose_name_plural = "Check-In Payments"
 
 class Checkout(BaseModel):
     booking = models.OneToOneField(

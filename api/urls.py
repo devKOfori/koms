@@ -170,5 +170,6 @@ urlpatterns = [
     path("guests/<str:guest_id>/", views.GuestDetails.as_view(), name="guest_details"),
     path("genders/", views.GenderList.as_view(), name='genders'),
     path("countries/", views.CountryList.as_view(), name='countries'),
+    path("identification-types/", views.IdentificationTypeList.as_view(), name='identification_types'),
 ]
 urlpatterns = format_suffix_patterns(urlpatterns)

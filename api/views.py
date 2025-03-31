@@ -176,6 +176,10 @@ class ShiftStatusList(generics.ListCreateAPIView):
     queryset = models.ShiftStatus.objects.all()
     serializer_class = api_serializers.ShiftStatusSerializer
 
+class IdentificationTypeList(generics.ListCreateAPIView):
+    queryset = models.IdentificationType.objects.all()
+    serializer_class = api_serializers.IdentificationTypeSerializer
+
 
 class ShiftNoteList(generics.ListCreateAPIView):
     serializer_class = api_serializers.ShiftNoteSerializer
@@ -631,6 +635,17 @@ class GenderList(generics.ListCreateAPIView):
 class BookingList(generics.ListCreateAPIView):
     queryset = models.Booking.objects.all()
     serializer_class = api_serializers.BookingSerializer
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        try:
+            profile = models.Profile.objects.get(user=self.request.user)
+        except models.Profile.DoesNotExist:
+            return Response(
+                {"error": "User not authenticated"}, status=status.HTTP_400_BAD_REQUEST
+            )
+        context["authored_by"] = profile
+        return context
 
 class CountryList(generics.ListCreateAPIView):
     queryset = models.Country.objects.all()

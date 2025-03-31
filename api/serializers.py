@@ -803,9 +803,9 @@ class BookingSerializer(serializers.ModelSerializer):
     guest = GuestSerializer(write_only=True)
     payment_status = serializers.SlugRelatedField(
         slug_field="name", read_only=True)
-    room_category = serializers.SlugRelatedField(
-        slug_field="name", queryset=models.RoomCategory.objects.all(), required=False
-    )
+    # room_category = serializers.SlugRelatedField(
+    #     slug_field="name", queryset=models.RoomCategory.objects.all(), required=False
+    # )
     room_type = serializers.SlugRelatedField(
         slug_field="name", queryset=models.RoomType.objects.all()
     )
@@ -817,10 +817,11 @@ class BookingSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "guest",
+            "guest_id",
             "guest_name",
             "email",
             "phone_number",
-            "room_category",
+            # "room_category",
             "room_type",
             "room_number",
             "booking_code",
@@ -833,33 +834,38 @@ class BookingSerializer(serializers.ModelSerializer):
             "amount_paid",
             "promo_code",
             "vip_status",
-            "sponsor",
+            # "sponsor",
             "payment_status",
+            "note",
+            "date_created",
             "created_by",
         ]
         read_only_fields = [
             "id",
+            "guest_id",
             "room_number",
             "booking_code",
             "guest_name",
             "email",
+            "room_category",
             "phone_number",
             "created_by",
             "rate",
             "vip_status",
             "number_of_guests",
             "payment_status",
+            "created_by",
         ]
 
     def validate_check_in_date(self, data):
-        if data < datetime.now():
+        if data.date() < timezone.now().date():
             raise serializers.ValidationError(
                 {"error": "Check-in date cannot be in the past"}
             )
         return data
 
     def validate_check_out_date(self, data):
-        if data < datetime.now():
+        if data.date() < timezone.now().date():
             raise serializers.ValidationError(
                 {"error": "Check-out date cannot be in the past"}
             )
@@ -875,265 +881,60 @@ class BookingSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        creator = self.context.get("created_by")
+        creator = self.context.get("authored_by")
         guest_data = validated_data.pop("guest")
+        print(guest_data)
         with transaction.atomic():
-            guest = models.Guest.objects.create(**guest_data)
+            guest = models.Guest.objects.create(guest_id=generators.generate_guest_id(), **guest_data)
             booking = models.Booking.objects.create(
                 guest=guest,
                 guest_name=f"{guest.first_name} {guest.last_name}",
                 booking_code=generators.generate_booking_code(),
                 email=guest.email,
                 phone_number=guest.phone_number,
+                room_category=validated_data.get("room_type").room_category,
                 number_of_guests=validated_data.get("number_of_older_guests", 0)
                 + validated_data.get("number_of_younger_guests", 0),
                 created_by=creator,
                 **validated_data,
             )
             return booking
+        
 
+class IdentificationTypeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.IdentificationType
+        fields = ["id", "name"]
+        read_only_fields = ["id"]
 
-# class BookingSerializer(serializers.ModelSerializer):
-#     title = serializers.SlugRelatedField(
-#         slug_field="name", queryset=models.NameTitle.objects.all()
-#     )
-#     room = serializers.SlugRelatedField(
-#         slug_field="room_number", queryset=models.Room.objects.all()
-#     )
-#     receipt = serializers.SlugRelatedField(
-#         slug_field="receipt_number",
-#         queryset=models.Receipt.objects.all(),
-#         allow_null=True,
-#     )
-#     gender = serializers.SlugRelatedField(
-#         slug_field="name", queryset=models.Gender.objects.all()
-#     )
-#     sponsor_type = serializers.SlugRelatedField(slug_field="name", read_only=True)
-
-#     class Meta:
-#         model = models.Booking
-#         exclude = [
-#             "client",
-#             "room_category",
-#             "room_type",
-#             "room_number",
-#             "number_of_guests",
-#             "payment_type",
-#         ]
-#         read_only_fields = ["id"]
-
-#     def validate_room(self, room: models.Room):
-#         """
-#         Validate the room status for booking.
-
-#         Parameters:
-#         room: A Room instance.
-
-#         Raises:
-#         serializers.ValidationError: If the room's status is not 'cleaned'.
-
-#         Returns:
-#         the Room instance.
-
-#         """
-#         if room.room_maintenance_status != "cleaned":
-#             raise serializers.ValidationError(
-#                 {
-#                     "error": "the room is not cleaned and is currently not available for booking"
-#                 }
-#             )
-
-#         if room.room_booking_status == "booked":
-#             raise serializers.ValidationError(
-#                 {"error": "the room currently has an active booking"}
-#             )
-
-#         return room
-
-#     def validate(self, attrs):
-#         check_in_date = attrs.get("check_in")
-#         check_out_date = attrs.get("check_out")
-
-#         # this condition prevents the creation of bookings where check-out date comes before check-in dates
-#         if check_in_date >= check_out_date:
-#             raise serializers.ValidationError(
-#                 {"error": "Check-out date must be later than check-in date."}
-#             )
-
-#         room_max_guests = attrs.get("room").max_guests
-
-#         # this condition prevents the booking of rooms where the number of guests is greater than the room's max capacity
-#         if (
-#             attrs.get("number_of_older_guests", 0)
-#             + attrs.get("number_of_younger_guests", 0)
-#             > room_max_guests
-#         ):
-#             raise serializers.ValidationError(
-#                 {"error": f"room takes a max of {room_max_guests} guests"}
-#             )
-
-#         sponsor = attrs.get("sponsor")
-#         receipt = attrs.get("receipt")
-#         # validations related to self-sponsoring bookings
-#         if sponsor and sponsor.sponsor_type.name.casefold() == "self":
-#             # this condition ensures that receipts are added to bookings that have 'self' as sponsor type
-#             if not receipt:
-#                 raise serializers.ValidationError(
-#                     {"error": "Receipts are required for self-sponsored bookings."}
-#                 )
-
-#             # this condition checks if the amount on a receipt can pay the cost of a booking
-#             if not receipt.can_pay(attrs.get("rate")):
-#                 raise serializers.ValidationError(
-#                     {
-#                         "error": "the balance on the receipt cannot pay for the cost of the booking"
-#                     }
-#                 )
-
-#         return attrs
-
-#     def create(self, validated_data: dict):
-#         # get user profile
-#         created_by = self.context["authored_by"]
-
-#         # this condition prevents all users who are not in frontdesk department from creating bookings
-#         # if not helpers.check_profile_department(
-#         #     profile=created_by, department_name="frontdesk"
-#         # ):
-#         if not created_by.is_member_of("Frontdesk"):
-#             raise serializers.ValidationError(
-#                 {"error": "only frontdesk staff are authorized to complete this action"}
-#             )
-
-#         client_data = {}
-#         client_data_keys = [
-#             "title",
-#             "first_name",
-#             "last_name",
-#             "gender",
-#             "email",
-#             "phone_number",
-#             "address",
-#             "national_id",
-#             "emergency_contact_name",
-#             "emergency_contact_email",
-#         ]
-#         for attr, value in validated_data.items():
-#             if attr in client_data_keys:
-#                 client_data[attr] = value
-
-#         with transaction.atomic():
-#             # Create client account
-#             client = models.Guest.objects.create(**client_data)
-
-#             # Room-related data
-#             room: models.Room = validated_data.pop("room")
-#             room_type = room.room_type
-#             room_number = room.room_number
-
-#             # Sponsor and payment related data
-#             sponsor: models.Sponsor = validated_data.pop("sponsor")
-#             sponsor_type: models.SponsorType = sponsor.sponsor_type
-#             payment_type: models.PaymentType = (
-#                 models.PaymentType.objects.get(name__iexact="self")
-#                 if sponsor_type.name.casefold() == "self"
-#                 else models.PaymentType.objects.get(name__iexact="credit")
-#             )
-
-#             # booking-related data
-#             number_of_guests = validated_data.get(
-#                 "number_of_older_guests"
-#             ) + validated_data.get("number_of_older_guests")
-
-#             booking = models.Booking.objects.create(
-#                 client=client,
-#                 room=room,
-#                 room_type=room_type,
-#                 room_number=room_number,
-#                 sponsor=sponsor,
-#                 sponsor_type=sponsor_type,
-#                 payment_type=payment_type,
-#                 number_of_guests=number_of_guests,
-#                 **validated_data,
-#             )
-
-#             # update 'room_booking_status' and 'room_maintenance_status'
-#             room.change_room_booking_status("booked")
-#             room.change_room_maintenance_status("used")
-#             room.save()
-
-#             # this condition, when true, updates the available amount field on a receipt
-#             if booking.payment_type.name.casefold() == "self" and booking.receipt:
-#                 booking.receipt.pay(booking.rate)
-#                 booking.receipt.save()
-
-#             return booking
-
-#     def update(self, instance, validated_data):
-#         # get user profile
-#         modified_by = self.context["authored_by"]
-#         client = instance.client
-
-#         # this condition prevents all users who are not in frontdesk department from updating bookings
-#         # if not helpers.check_profile_department(
-#         #     profile=modified_by, department_name="frontdesk"
-#         # ):
-#         if not modified_by.is_member_of("Frontdesk"):
-#             raise serializers.ValidationError(
-#                 {"error": "only frontdesk staff are authorized to complete this action"}
-#             )
-
-#         client_data = {}
-#         client_data_keys = [
-#             "title",
-#             "first_name",
-#             "last_name",
-#             "gender",
-#             "email",
-#             "phone_number",
-#             "address",
-#             "national_id",
-#             "emergency_contact_name",
-#             "emergency_contact_email",
-#         ]
-#         for attr, value in validated_data.items():
-#             if attr in client_data_keys:
-#                 setattr(client, attr, value)
-#         with transaction.atomic():
-#             client.save()
-#             for attr, value in validated_data.items():
-#                 setattr(instance, attr, value)
-#             instance.client = client
-
-#             room: models.Room = validated_data.pop("room")
-#             room_type = room.room_type
-#             room_number = room.room_number
-
-#             # Sponsor and payment related data
-#             sponsor: models.Sponsor = validated_data.pop("sponsor")
-#             sponsor_type: models.SponsorType = sponsor.sponsor_type
-#             payment_type: models.PaymentType = (
-#                 models.PaymentType.objects.get(name__iexact="self")
-#                 if sponsor_type.name.casefold() == "self"
-#                 else models.PaymentType.objects.get(name__iexact="credit")
-#             )
-
-#             # booking-related data
-#             number_of_guests = validated_data.get(
-#                 "number_of_older_guests"
-#             ) + validated_data.get("number_of_older_guests")
-
-#             instance.room = room or instance.room
-#             instance.room_type = room_type or instance.room_type
-#             instance.room_number = room_number or instance.room_number
-#             instance.sponsor = sponsor or instance.sponsor
-#             instance.sponsor_type = sponsor_type or instance.sponsor_type
-#             instance.payment_type = payment_type or instance.payment_type
-#             instance.number_of_guests = number_of_guests or instance.number_of_guests
-#             instance.save()
-
-#             return instance
-
+class CheckInSerializer(serializers.ModelSerializer):
+    guest = serializers.SlugRelatedField(
+        slug_field="guest_id", queryset=models.Guest.objects.all(), required=False, allow_null=True
+    )
+    class Meta:
+        model = models.Checkin
+        fields = [
+            "id",
+            "booking_code",
+            "guest",
+            "guest_name",
+            "gender",
+            "email",
+            "phone_number",
+            "room",
+            "room_type",
+            "check_in_date",
+            "number_of_older_guests",
+            "number_of_younger_guests",
+            "sponsor",
+            "total_payment",
+            "check_out_date",
+            "checked_out",
+        ]
+        read_only_fields = [
+            "id",
+            "checked_out",
+        ]
 
 class AmenitySerializer(serializers.ModelSerializer):
     class Meta:
