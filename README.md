@@ -18,3 +18,21 @@ HOMS is a versatile hotel management system designed to streamline operations an
     - React
     - Typescript
     - Javascript
+
+## Screenshots
+1. Login Page
+![Login](../hms/homs_screenshots/login.jpg)
+
+2. Dashboard
+![Dashboard](../hms/homs_screenshots/frontdesk_dashboard.jpg)
+3. Shift Management Page
+![Shift Management Page](../hms/homs_screenshots/shift_management.jpg)
+4. Add Staff to Shift Page
+![Add Staff to Shift](../hms/homs_screenshots/add_shift_staff.jpg)
+5. User Shifts List
+![User Shifts List](../hms/homs_screenshots/my_shifts.jpg)
+6. Shift Details Page
+![Shift Details Page](../hms/homs_screenshots/shift_details.jpg)
+7. Bookings List
+![Bookings](../hms/homs_screenshots/bookings.jpg)
+
