@@ -10,5 +10,5 @@ HOMS is a versatile hotel management system designed to streamline operations an
 - **Billing & Payment**: Automated tracking of guest expenses. System accepts payments via mobile money, cash, and card.
 
 ## Technology & Security
-**Backend**: Django, django-rest-framework, Python.
-**Frontend**: React, Typescript, Javascript.
+**Backend**: Django, django-rest-framework, Python
+**Frontend**: React, Typescript, Javascript
