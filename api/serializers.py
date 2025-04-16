@@ -908,15 +908,16 @@ class IdentificationTypeSerializer(serializers.ModelSerializer):
         read_only_fields = ["id"]
 
 class CheckInSerializer(serializers.ModelSerializer):
-    guest = serializers.SlugRelatedField(
-        slug_field="guest_id", queryset=models.Guest.objects.all(), required=False, allow_null=True
-    )
+    # guest = serializers.SlugRelatedField(
+    #     slug_field="guest_id", queryset=models.Guest.objects.all(), required=False, allow_null=True
+    # )
     class Meta:
         model = models.Checkin
         fields = [
             "id",
-            "booking_code",
-            "guest",
+            # "booking_code",
+            # "guest",
+            "guest_id",
             "guest_name",
             "gender",
             "email",
@@ -926,6 +927,7 @@ class CheckInSerializer(serializers.ModelSerializer):
             "check_in_date",
             "number_of_older_guests",
             "number_of_younger_guests",
+            "number_of_guests",
             "sponsor",
             "total_payment",
             "check_out_date",
@@ -934,6 +936,7 @@ class CheckInSerializer(serializers.ModelSerializer):
         read_only_fields = [
             "id",
             "checked_out",
+            "number_of_guests",
         ]
 
 class AmenitySerializer(serializers.ModelSerializer):

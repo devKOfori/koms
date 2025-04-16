@@ -704,6 +704,10 @@ class Guest(BaseModel):
             if self.title
             else f"{self.first_name} {self.last_name}"
         )
+    
+    @property
+    def full_name(self):
+        return f"{self.first_name} {self.last_name}"
 
     class Meta:
         db_table = "Guest"
