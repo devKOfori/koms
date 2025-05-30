@@ -686,7 +686,23 @@ class HouseKeepingTaskStaffList(APIView):
 class GenderList(generics.ListCreateAPIView):
     queryset = models.Gender.objects.all()
     serializer_class = api_serializers.GenderSerializer
+    permission_classes = [custom_permissions.IsAdminProfileOrReadOnly]
 
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        if self.request.user.is_authenticated:
+            try:
+                profile = models.Profile.objects.get(user=self.request.user)
+                context["created_by"] = profile
+            except models.Profile.DoesNotExist:
+                raise serializers.ValidationError({"error": "user account has no profile"})
+        return context
+    
+class GenderDetail(generics.RetrieveUpdateDestroyAPIView):
+    queryset = models.Gender.objects.all()
+    serializer_class = api_serializers.GenderSerializer
+    lookup_url_kwarg = "pk"
+    permission_classes = [custom_permissions.IsAdminProfileOrReadOnly]
 
 class BookingList(generics.ListCreateAPIView):
     queryset = models.Booking.objects.all()

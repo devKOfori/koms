@@ -157,6 +157,11 @@ class GenderSerializer(serializers.ModelSerializer):
         fields = ["id", "name"]
         read_only_fields = ["id"]
 
+    def create(self, validated_data):
+        created_by = self.context.get("created_by")
+        gender = models.Gender.objects.create(**validated_data, 
+                                              created_by=created_by)
+        return gender
 
 class CustomUserProfileSerializer(serializers.ModelSerializer):
     user = CustomUserSerializer()
