@@ -108,8 +108,8 @@ class RoleSerializer(serializers.ModelSerializer):
 class DepartmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Department
-        fields = ["id", "name"]
-        read_only_fields = ["id"]
+        fields = ["id", "name", "description", "created_by", "date_created"]
+        read_only_fields = ["id", "created_by", "date_created"]
 
     def create(self, validated_data):
         with transaction.atomic():
