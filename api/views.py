@@ -174,6 +174,23 @@ class RoleDetail(generics.RetrieveUpdateDestroyAPIView):
 class DepartmentList(generics.ListCreateAPIView):
     queryset = models.Department.objects.all()
     serializer_class = api_serializers.DepartmentSerializer
+    permission_classes = [custom_permissions.IsAdminProfileOrReadOnly]
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        if self.request.user.is_authenticated:
+            try:
+                profile = models.Profile.objects.get(user=self.request.user)
+                context["created_by"] = profile
+            except models.Profile.DoesNotExist:
+                raise serializers.ValidationError({"error": "user account has no profile"})
+        return context
+    
+class DepartmentDetail(generics.RetrieveUpdateDestroyAPIView):
+    queryset = models.Department.objects.all()
+    serializer_class = api_serializers.DepartmentSerializer
+    lookup_url_kwarg = "pk"
+    permission_classes = [custom_permissions.IsAdminProfileOrReadOnly]
 
 
 class CustomUpdateView(APIView):
