@@ -1,23 +1,23 @@
 import os
+from typing import Literal, Optional
 from django.utils import timezone
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
+from utils import defaults, choices
 import uuid, datetime
 from . import managers
 from django.conf import settings
 from utils.system_variables import PASSWORD_RESET
-from utils import defaults, choices
-from typing import Literal, Optional
 from rest_framework import serializers
 from django.db import transaction
 
 # Create your models here.
 
 
+
 # Module defaults
 # ROOM_STATUS_DEFAULT = defaults.get_table_default("roomstatus")
-
 
 class BaseModel(models.Model):
     id = models.UUIDField(default=uuid.uuid4, primary_key=True)
@@ -27,23 +27,23 @@ class BaseModel(models.Model):
 
 
 class Department(BaseModel):
-    name = models.CharField(max_length=255)
+    name = models.CharField(max_length=255, unique=True, db_index=True)
 
     def __str__(self):
         return self.name
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "department"
 
 
 class Role(BaseModel):
-    # headmaster, principal, teacher, cook, student, guardian
-    name = models.CharField(max_length=255, db_index=True)
+    name = models.CharField(max_length=255, unique=True, db_index=True)
+    description = models.TextField(blank=True, null=True)
 
     def __str__(self):
-        return self.name
+        return f'{self.name}'
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "role"
 
 
@@ -52,23 +52,15 @@ class CustomUser(AbstractBaseUser, BaseModel, PermissionsMixin):
     first_name = models.CharField(max_length=255)
     last_name = models.CharField(max_length=255)
     is_staff = models.BooleanField(default=False)
-    is_superuser = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
+    email = models.EmailField(blank=True, null=True)
 
     USERNAME_FIELD = "username"
     REQUIRED_FIELDS = ["first_name", "last_name"]
 
     objects = managers.CustomUserManager()
 
-    def has_perm(self, perm, obj=None):
-        # Simplified permission check; customize as needed
-        return True
-
-    def has_module_perms(self, app_label):
-        # Allow access to all app modules; customize as needed
-        return True
-
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "user"
         verbose_name = "User"
         verbose_name_plural = "Users"
@@ -88,7 +80,7 @@ class PasswordReset(BaseModel):
     def __str__(self):
         return self.token
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "passwordreset"
         verbose_name = "Password Reset"
         verbose_name_plural = "Password Resets"
@@ -112,7 +104,7 @@ class Gender(BaseModel):
     def __str__(self):
         return self.name
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "gender"
 
 
@@ -150,7 +142,7 @@ class Profile(BaseModel):
     def has_shift(self, date, shift_name: str) -> bool:
         return self.shifts.filter(date=date, shift__name__iexact=shift_name).exists()
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "profile"
 
 
@@ -164,7 +156,7 @@ class ProfileRole(BaseModel):
     def __str__(self):
         return f"{self.profile.full_name} - [{self.role.name}]"
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "profilerole"
         verbose_name = "Profile Role"
         verbose_name_plural = "Profile Roles"
@@ -180,7 +172,7 @@ class Shift(BaseModel):
     def __str__(self):
         return self.name
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "workshift"
 
 
@@ -191,7 +183,7 @@ class ShiftStatus(BaseModel):
     def __str__(self):
         return self.name
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "shiftstatus"
 
 
@@ -226,7 +218,7 @@ class ProfileShiftAssign(BaseModel):
     def change_status(self, new_status):
         self.status = ShiftStatus.objects.get(name=new_status)
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "profileshiftassign"
         verbose_name = "Shift Assignment"
         verbose_name_plural = "Shift Assignments"
@@ -257,7 +249,7 @@ class ShiftNote(BaseModel):
     def __str__(self):
         return f"{self.assigned_shift} - {self.date_created}"
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "shiftnote"
         verbose_name = "Shift Note"
         verbose_name_plural = "Shift Notes"
@@ -271,7 +263,7 @@ class HotelFloor(BaseModel):
     def __str__(self):
         return self.name
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "hotelfloor"
 
 
@@ -283,7 +275,7 @@ class HotelView(BaseModel):
     def __str__(self):
         return self.name
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "hotelview"
         verbose_name = "Hotel View"
         verbose_name_plural = "Hotel Views"
@@ -297,7 +289,7 @@ class Amenity(BaseModel):
     def __str__(self):
         return self.name
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "amenities"
         verbose_name = "Amenity"
         verbose_name_plural = "Amenities"
@@ -311,7 +303,7 @@ class BedType(BaseModel):
     def __str__(self):
         return self.name
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "bedtype"
         verbose_name = "Bed Type"
         verbose_name_plural = "Beds Types"
@@ -326,7 +318,7 @@ class RoomCategory(BaseModel):
     def __str__(self):
         return self.name
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "roomcategory"
         verbose_name = "Room Category"
         verbose_name_plural = "Room Categories"
@@ -350,7 +342,7 @@ class RoomType(BaseModel):
     def __str__(self):
         return self.name
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "roomtype"
         verbose_name = "Room Type"
         verbose_name_plural = "Room Types"
@@ -428,7 +420,7 @@ class Room(BaseModel):
         """
         self.room_booking_status = status
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "room"
 
 
@@ -438,7 +430,7 @@ class RoomStatus(BaseModel):
     def __str__(self):
         return self.name
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "roomstatus"
 
 
@@ -526,7 +518,7 @@ class RoomKeepingAssign(BaseModel):
             status__name__iexact="ongoing"
         ).exists()
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "roomkeepingassign"
         verbose_name = "Room Keeping Assignment"
         verbose_name_plural = "Room Keeping Assignments"
@@ -547,7 +539,7 @@ class HouseKeepingState(BaseModel):
     def __str__(self):
         return self.name
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "housekeepingstate"
         verbose_name = "House-Keeping State"
         verbose_name_plural = "House-Keeping States"
@@ -567,7 +559,7 @@ class ProcessRoomKeeping(BaseModel):
     def __str__(self):
         return f"{self.room_number} - {self.status}"
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "processroomkeeping"
         verbose_name = "Process Room Keeping"
         verbose_name_plural = "Process Room Keepings"
@@ -589,7 +581,7 @@ class ProcessRoomKeeping(BaseModel):
 #     def __str__(self):
 #         return f"{self.initial_trans_state} -> {self.final_trans_state}"
 
-#     class Meta:
+#     class Meta(BaseModel.Meta):):
 #         db_table = "housekeepingstatetrans"
 #         verbose_name = "House-Keeping State Transfer"
 #         verbose_name_plural = "House-Keeping State Transfers"
@@ -611,7 +603,7 @@ class ProcessRoomKeeping(BaseModel):
 #         # returns the final trans state of the room
 #         return f"{self.room} - {self.room_state_trans.final_trans_state.name}"
 
-#     class Meta:
+#     class Meta(BaseModel.Meta):):
 #         db_table = "processroomkeeping"
 #         verbose_name = "Room Keeping"
 #         verbose_name_plural = "Room Keepings"
@@ -631,7 +623,7 @@ class ProcessRoomKeeping2(BaseModel):
     def __str__(self):
         return f"{self.room_number} - {self.status}"
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "processroomkeeping2"
         verbose_name = "Process Room Keeping"
         verbose_name_plural = "Process Room Keepings"
@@ -644,7 +636,7 @@ class NameTitle(BaseModel):
     def __str__(self):
         return self.name
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "nametitle"
         verbose_name = "Title"
         verbose_name_plural = "Titles"
@@ -656,7 +648,7 @@ class IdentificationType(BaseModel):
     def __str__(self):
         return self.name
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "identificationtype"
         verbose_name = "Identification Type"
         verbose_name_plural = "Identification Types"
@@ -669,7 +661,7 @@ class Country(BaseModel):
     def __str__(self):
         return self.name
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "country"
         verbose_name = "Country"
         verbose_name_plural = "Countries"
@@ -709,7 +701,7 @@ class Guest(BaseModel):
     def full_name(self):
         return f"{self.first_name} {self.last_name}"
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "Guest"
 
 
@@ -721,7 +713,7 @@ class PaymentType(BaseModel):
     def __str__(self):
         return self.name
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "paymenttype"
         verbose_name = "Payment Type"
         verbose_name_plural = "Payment Types"
@@ -735,7 +727,7 @@ class SponsorType(BaseModel):
     def __str__(self):
         return self.name
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "sponsortype"
         verbose_name = "Sponsor Type"
         verbose_name_plural = "Sponsor Types"
@@ -752,7 +744,7 @@ class Sponsor(BaseModel):
     def __str__(self):
         return self.name
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "sponsor"
 
 
@@ -762,7 +754,7 @@ class PaymentMethod(BaseModel):
     def __str__(self):
         return self.name
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "paymentmethod"
         verbose_name = "Payment Method"
         verbose_name_plural = "Payment Methods"
@@ -868,9 +860,9 @@ class Booking(BaseModel):
     )
 
     def __str__(self):
-        return
+        return self.booking_code or f"Booking for {self.guest_name} in {self.room_number}"
 
-    def extend_booking(self, num_days: datetime.datetime):
+    def extend_booking(self, num_days: int):
         """
         Extend the booking by num_days.
         Parameters:
@@ -890,7 +882,7 @@ class Booking(BaseModel):
         """
         self.check_out = timezone.now()
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "booking"
 
 
@@ -900,7 +892,7 @@ class ArrivalMode(BaseModel):
     def __str__(self):
         return self.name
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "arrivalmode"
         verbose_name = "Arrival Mode"
         verbose_name_plural = "Arrival Modes"
@@ -912,7 +904,7 @@ class VIPStatus(BaseModel):
     def __str__(self):
         return self.name
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "vipstatus"
         verbose_name = "VIP Status"
         verbose_name_plural = "VIP Statuses"
@@ -927,7 +919,7 @@ class LoyaltyProgram(BaseModel):
     def __str__(self):
         return self.name
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "loyaltyprogram"
         verbose_name = "Loyalty Program"
         verbose_name_plural = "Loyalty Programs"
@@ -946,7 +938,7 @@ class GuestLoyaltyPrograms(BaseModel):
     def __str__(self):
         return f"{self.guest} - {self.loyalty_program}"
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "Guestloyaltyprograms"
         verbose_name = "Guest Loyalty Program"
         verbose_name_plural = "Guest Loyalty Programs"
@@ -989,7 +981,7 @@ class Checkin(BaseModel):
     check_out_date = models.DateTimeField(default=timezone.now)
     checked_out = models.BooleanField(default=False)
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table="checkin"
         verbose_name="Check-In"
         verbose_name_plural = "Check-Ins"
@@ -1003,7 +995,7 @@ class CheckinPayment(BaseModel):
     payment_timestamp = models.DateTimeField(default=timezone.now)
     received_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True, blank=True)
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "checkinpayment"
         verbose_name = "Check-In Payment"
         verbose_name_plural = "Check-In Payments"
@@ -1030,7 +1022,7 @@ class Checkout(BaseModel):
     def __str__(self):
         return f"{self.booking} - {self.guest}"
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "checkout"
         verbose_name = "Checkout"
         verbose_name_plural = "Checkouts"
@@ -1043,7 +1035,7 @@ class Priority(BaseModel):
     def __str__(self):
         return self.name
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "priority"
         verbose_name = "Priority"
         verbose_name_plural = "Priorities"
@@ -1056,7 +1048,7 @@ class ComplaintStatus(BaseModel):
     def __str__(self):
         return self.name
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "complaintstatus"
         verbose_name = "Complaint Status"
         verbose_name_plural = "Complaint Statuses"
@@ -1069,7 +1061,7 @@ class Hashtag(BaseModel):
     def __str__(self):
         return self.name
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "hashtag"
         verbose_name = "Hashtag"
         verbose_name_plural = "Hashtags"
@@ -1098,7 +1090,7 @@ class Complaint(BaseModel):
     def __str__(self):
         return f"{self.guest} - {self.room_number}"
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "complaint"
         verbose_name = "Complaint"
         verbose_name_plural = "Complaints"
@@ -1140,7 +1132,7 @@ class AssignComplaint(BaseModel):
     def __str__(self):
         return f"{self.complaint} - {self.assigned_to}"
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "assigncomplaint"
         verbose_name = "Assign Complaint"
         verbose_name_plural = "Assign Complaints"
@@ -1178,7 +1170,7 @@ class ProcessComplaint(BaseModel):
     def __str__(self):
         return f"{self.complaint} - {self.process_complaint_date}"
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "processcomplaint"
         verbose_name = "Process Complaint"
         verbose_name_plural = "Process Complaints"
@@ -1194,7 +1186,7 @@ class SponsorClaims(BaseModel):
     def __str__(self):
         return f"{self.sponsor} - {self.guest}"
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "sponsorclaims"
         verbose_name = "Sponsor Claim"
         verbose_name_plural = "Sponsor Claims"
@@ -1204,7 +1196,7 @@ class PaymentStatus(BaseModel):
     # eg. pending, full-payment, part-payment
     name = models.CharField(max_length=255, db_index=True)
 
-    class Meta:
+    class Meta(BaseModel.Meta):
         db_table = "paymentstatus"
         verbose_name = "Payment Status"
         verbose_name_plural = "Payment Statuses"

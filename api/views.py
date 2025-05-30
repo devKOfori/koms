@@ -1,9 +1,11 @@
 from django.shortcuts import render
 from django.db.models import Prefetch
+from django.shortcuts import get_object_or_404
 from rest_framework import generics, status
 from rest_framework import exceptions, serializers
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from . import serializers as api_serializers
@@ -14,6 +16,8 @@ from rest_framework.decorators import api_view
 from datetime import datetime
 from django.utils import timezone
 from rest_framework_simplejwt.views import TokenBlacklistView
+from . import custom_permissions
+
 
 
 # Create your views here.
@@ -152,7 +156,20 @@ class ProfileDetail(generics.RetrieveUpdateDestroyAPIView):
 class RoleList(generics.ListCreateAPIView):
     queryset = models.Role.objects.all()
     serializer_class = api_serializers.RoleSerializer
+    permission_classes = [custom_permissions.IsAdminProfileOrReadOnly]
 
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        if self.request.user.is_authenticated:
+            profile = get_object_or_404(models.Profile, user=self.request.user)
+            context["created_by"] = profile
+        return context
+
+class RoleDetail(generics.RetrieveUpdateDestroyAPIView):
+    queryset = models.Role.objects.all()
+    serializer_class = api_serializers.RoleSerializer
+    lookup_url_kwarg = "pk"
+    permission_classes = [custom_permissions.IsAdminProfileOrReadOnly]
 
 class DepartmentList(generics.ListCreateAPIView):
     queryset = models.Department.objects.all()

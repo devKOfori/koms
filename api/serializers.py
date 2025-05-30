@@ -11,6 +11,7 @@ from utils import generators, system_variables, notifications, helpers, choices
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenBlacklistSerializer
 
 
+
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     """
     this class customize the token claims
@@ -62,30 +63,25 @@ class CustomUserSerializer(serializers.ModelSerializer):
             "password": {"write_only": True},
         }
 
-    def validate_username(self, value):
-        # print("here.......")
-        user_model = get_user_model()
-        request = self.context.get(
-            "request"
-        )  # Get the request from the serializer context
-        # if request and request.method in ['PUT', 'PATCH']:
-        if self.instance:
-            # Exclude the current user from the uniqueness check
-            if (
-                user_model.objects.filter(username=value)
-                .exclude(id=self.instance.id)
-                .exists()
-            ):
-                raise serializers.ValidationError(
-                    "User with this username already exists."
-                )
-        else:
-            # For creation, ensure the username is unique
-            if user_model.objects.filter(username=value).exists():
-                raise serializers.ValidationError(
-                    "User with this username already exists."
-                )
-        return value
+    # def validate_username(self, value: str):
+    #     # print("here.......")
+    #     user_model = get_user_model()
+    #     if self.instance:
+    #         if (
+    #             user_model.objects.filter(username=value)
+    #             .exclude(id=self.instance.id)
+    #             .exists()
+    #         ):
+    #             raise serializers.ValidationError(
+    #                 "User with this username already exists."
+    #             )
+    #     else:
+    #         # For creation, ensure the username is unique
+    #         if user_model.objects.filter(username=value).exists():
+    #             raise serializers.ValidationError(
+    #                 "User with this username already exists."
+    #             )
+    #     return value
 
 
 class RoleSerializer(serializers.ModelSerializer):
@@ -94,33 +90,18 @@ class RoleSerializer(serializers.ModelSerializer):
         fields = ["id", "name"]
         read_only_fields = ["id"]
 
-    def validate_name(self, value):
-        if models.Role.objects.filter(name__iexact=value).exists():
-            raise serializers.ValidationError(
-                {"error": "A role with the same name already exist"}
-            )
-        return value
-
     def create(self, validated_data):
         with transaction.atomic():
             role = models.Role.objects.create(**validated_data)
-            # create corresponding group
-            Group.objects.get_or_create(**validated_data)
+            Group.objects.get_or_create(name=validated_data.get("name"))
         return role
 
-    def update(self, instance, validated_data):
+    def update(self, instance: models.Role, validated_data)->models.Role:
         with transaction.atomic():
             old_name = instance.name
-            new_name = validated_data.get("name")
-            instance.name = new_name
+            instance.name = validated_data.get("name", instance.name)
             instance.save()
-            if old_name != new_name:
-                try:
-                    group = Group.objects.get(name=old_name)
-                    group.name = new_name
-                    group.save()
-                except Group.DoesNotExist:
-                    Group.objects.create(name=new_name)
+            Group.objects.update_or_create(name=old_name, defaults={"name": validated_data.get("name")})
         return instance
 
 
@@ -129,13 +110,6 @@ class DepartmentSerializer(serializers.ModelSerializer):
         model = models.Department
         fields = ["id", "name"]
         read_only_fields = ["id"]
-
-    def validate_name(self, value):
-        if models.Department.objects.filter(name__iexact=value).exists():
-            raise serializers.ValidationError(
-                {"error": "A department with the same name exist"}
-            )
-        return value
 
     def create(self, validated_data):
         with transaction.atomic():

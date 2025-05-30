@@ -1,9 +1,9 @@
 from django.urls import path
-from . import views
 from rest_framework.urlpatterns import format_suffix_patterns
 from rest_framework_simplejwt.views import (
-    TokenRefreshView, TokenBlacklistView
+    TokenRefreshView
 )
+from . import views
 
 urlpatterns = [
     path("token/", views.CustomTokenObtainPairView.as_view(), name="token_obtain_pair"),
@@ -30,6 +30,7 @@ urlpatterns = [
         name="my_department_staff",
     ),
     path("roles/", views.RoleList.as_view(), name="roles"),
+    path("roles/<uuid:pk>/", views.RoleDetail.as_view(), name="role_details"),
     path("departments/", views.DepartmentList.as_view(), name="departments"),
     path("shifts/", views.ShiftList.as_view(), name="shifts"),
     path("my-shifts/", views.MyShiftList.as_view(), name="my_shifts"),
