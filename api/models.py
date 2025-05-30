@@ -21,7 +21,7 @@ from django.db import transaction
 
 class BaseModel(models.Model):
     id = models.UUIDField(default=uuid.uuid4, primary_key=True)
-
+    
     class Meta:
         abstract = True
 
@@ -105,7 +105,10 @@ def profile_photo_upload_path(instance, filename: str):
 
 class Gender(BaseModel):
     name = models.CharField(max_length=10)
-
+    created_by = models.ForeignKey(
+        "Profile", on_delete=models.SET_NULL, null=True, related_name="genders_created"
+    )
+    date_created = models.DateTimeField(auto_now_add=True)
     def __str__(self):
         return self.name
 
@@ -662,9 +665,11 @@ class Country(BaseModel):
     name = models.CharField(max_length=255)
     country_code = models.CharField(max_length=255, blank=True, null=True)
     abbr = models.CharField(max_length=255, blank=True, null=True)
+    created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
+    date_created = models.DateTimeField(auto_now_add=True)    
 
     def __str__(self):
-        return self.name
+        return f"{self.name} ({self.abbr})"
 
     class Meta(BaseModel.Meta):
         db_table = "country"

@@ -192,6 +192,28 @@ class DepartmentDetail(generics.RetrieveUpdateDestroyAPIView):
     lookup_url_kwarg = "pk"
     permission_classes = [custom_permissions.IsAdminProfileOrReadOnly]
 
+class CountryList(generics.ListCreateAPIView):
+    queryset = models.Country.objects.all()
+    serializer_class = api_serializers.CountrySerializer
+    permission_classes = [custom_permissions.IsAdminProfileOrReadOnly]
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        if self.request.user.is_authenticated:
+            try:
+                profile = models.Profile.objects.get(user=self.request.user)
+                context["created_by"] = profile
+            except models.Profile.DoesNotExist:
+                raise serializers.ValidationError({"error": "user account has no profile"})
+        return context
+    
+class CountryDetail(generics.RetrieveUpdateDestroyAPIView):
+    queryset = models.Country.objects.all()
+    serializer_class = api_serializers.CountrySerializer
+    lookup_url_kwarg = "pk"
+    permission_classes = [custom_permissions.IsAdminProfileOrReadOnly]
+
+
 
 class CustomUpdateView(APIView):
     def put(self, request, *args, **kwargs):
@@ -681,22 +703,6 @@ class BookingList(generics.ListCreateAPIView):
         context["authored_by"] = profile
         return context
 
-class CountryList(generics.ListCreateAPIView):
-    queryset = models.Country.objects.all()
-    serializer_class = api_serializers.CountrySerializer
-
-    def get_serializer_context(self):
-        try:
-            profile = models.Profile.objects.get(user=self.request.user)
-        except models.Profile.DoesNotExist:
-            return Response(
-                {"error": "user profile does not exist"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        context = super().get_serializer_context()
-        context["authored_by"] = profile
-        return context
-
 
 class BookingExtend(APIView):
     def post(self, request):
@@ -896,23 +902,6 @@ class RoomDetail(generics.RetrieveUpdateDestroyAPIView):
         context = super().get_serializer_context()
         context["authored_by"] = profile
         return context
-
-
-# class AmenityList(generics.ListCreateAPIView):
-#     queryset = models.Amenity.objects.all()
-#     serializer_class = api_serializers.AmenitySerializer
-
-#     def get_serializer_context(self):
-#         try:
-#             profile = models.Profile.objects.get(user=self.request.user)
-#         except models.Profile.DoesNotExist:
-#             return Response(
-#                 {"error": "user profile does not exist"},
-#                 status=status.HTTP_400_BAD_REQUEST,
-#             )
-#         context = super().get_serializer_context()
-#         context["authored_by"] = profile
-#         return context
 
 
 class AmenityDetail(generics.RetrieveUpdateDestroyAPIView):

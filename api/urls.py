@@ -37,6 +37,9 @@ urlpatterns = [
     path(
         "departments/<uuid:pk>/", views.DepartmentDetail.as_view(), name="department_details"
     ),
+
+    path("countries/", views.CountryList.as_view(), name="countries"),
+    path("countries/<uuid:pk>/", views.CountryDetail.as_view(), name="country_details"),
     
     path("shifts/", views.ShiftList.as_view(), name="shifts"),
     path("my-shifts/", views.MyShiftList.as_view(), name="my_shifts"),
