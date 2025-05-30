@@ -710,7 +710,15 @@ class RoomKeepingAssignSerializer(serializers.ModelSerializer):
 class NameTitleSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.NameTitle
-        fields = ["name"]
+        fields = ["id", "name", "created_by", "date_created"] 
+        read_only_fields = ["id", "created_by", "date_created"]
+
+    def create(self, validated_data):
+        created_by = self.context.get("created_by")
+        title = models.NameTitle.objects.create(
+            created_by=created_by, **validated_data
+        )
+        return title
 
 
 

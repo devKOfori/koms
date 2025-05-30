@@ -640,9 +640,11 @@ class ProcessRoomKeeping2(BaseModel):
 
 class NameTitle(BaseModel):
     name = models.CharField(max_length=255)
+    created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
+    date_created = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return self.name
+        return f"{self.name}"
 
     class Meta(BaseModel.Meta):
         db_table = "nametitle"

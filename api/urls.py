@@ -44,6 +44,8 @@ urlpatterns = [
     path("genders/", views.GenderList.as_view(), name='genders'),
     path("genders/<uuid:pk>/", views.GenderDetail.as_view(), name="gender_details"),
 
+    path("titles/", views.NameTitleList.as_view(), name="titles"),
+    path("titles/<uuid:pk>/", views.NameTitleDetail.as_view(), name="title_details"),
 
     path("shifts/", views.ShiftList.as_view(), name="shifts"),
     path("my-shifts/", views.MyShiftList.as_view(), name="my_shifts"),
@@ -179,7 +181,7 @@ urlpatterns = [
     path("priorities/", views.PriorityList.as_view(), name="priorities"),
 
     # urls for guests management
-    path("titles/", views.NameTitleList.as_view(), name="titles"),
+    
     path("guests/", views.GuestList.as_view(), name="guests"),
     path("guests/<str:guest_id>/", views.GuestDetails.as_view(), name="guest_details"),
     
