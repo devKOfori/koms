@@ -29,9 +29,15 @@ urlpatterns = [
         views.MyDepartmentStaffList.as_view(),
         name="my_department_staff",
     ),
+
     path("roles/", views.RoleList.as_view(), name="roles"),
     path("roles/<uuid:pk>/", views.RoleDetail.as_view(), name="role_details"),
+    
     path("departments/", views.DepartmentList.as_view(), name="departments"),
+    path(
+        "departments/<uuid:pk>/", views.DepartmentDetail.as_view(), name="department_details"
+    ),
+    
     path("shifts/", views.ShiftList.as_view(), name="shifts"),
     path("my-shifts/", views.MyShiftList.as_view(), name="my_shifts"),
     path(
