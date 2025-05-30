@@ -87,7 +87,7 @@ class CustomUserSerializer(serializers.ModelSerializer):
 class RoleSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Role
-        fields = ["id", "name"]
+        fields = ["id", "name", "description"]
         read_only_fields = ["id"]
 
     def create(self, validated_data):
