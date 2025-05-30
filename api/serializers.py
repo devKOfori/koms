@@ -11,7 +11,6 @@ from utils import generators, system_variables, notifications, helpers, choices
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenBlacklistSerializer
 
 
-
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     """
     this class customize the token claims
@@ -53,7 +52,6 @@ class CustomTokenBlacklistSerializer(TokenBlacklistSerializer):
         print(attrs)
         data = super().validate(attrs=attrs)
 
-
 class CustomUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.CustomUser
@@ -83,7 +81,6 @@ class CustomUserSerializer(serializers.ModelSerializer):
     #             )
     #     return value
 
-
 class RoleSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Role
@@ -103,7 +100,6 @@ class RoleSerializer(serializers.ModelSerializer):
             instance.save()
             Group.objects.update_or_create(name=old_name, defaults={"name": validated_data.get("name")})
         return instance
-
 
 class DepartmentSerializer(serializers.ModelSerializer):
     class Meta:
@@ -138,7 +134,6 @@ class DepartmentSerializer(serializers.ModelSerializer):
                     Group.objects.create(name=new_name)
         return instance
 
-
 class ProfileRolesSerializer(serializers.ModelSerializer):
     # role = RoleSerializer()
     role = serializers.SlugRelatedField(
@@ -149,7 +144,6 @@ class ProfileRolesSerializer(serializers.ModelSerializer):
         model = models.ProfileRole
         fields = ["id", "role", "is_active"]
         read_only_fields = ["id"]
-
 
 class GenderSerializer(serializers.ModelSerializer):
     class Meta:
@@ -311,7 +305,6 @@ class CustomUserProfileSerializer(serializers.ModelSerializer):
 
             return instance
 
-
 class PasswordResetSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.PasswordReset
@@ -389,13 +382,11 @@ class PasswordResetSerializer(serializers.ModelSerializer):
             #         )
         return instance
 
-
 class ShiftSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Shift
         fields = ["id", "name", "start_time", "end_time"]
         read_only_fields = ["id"]
-
 
 class ProfileShiftAssignSerializer(serializers.ModelSerializer):
     # profile = CustomUserProfileSerializer()
@@ -499,7 +490,6 @@ class ProfileShiftAssignSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
 
-
 class MyShiftSerializer(serializers.ModelSerializer):
     shift = serializers.SlugRelatedField(slug_field="name", read_only=True)
     start_time = serializers.SerializerMethodField(read_only=True)
@@ -525,13 +515,11 @@ class MyShiftSerializer(serializers.ModelSerializer):
     def get_end_time(self, obj):
         return obj.shift.end_time if obj.shift else None
 
-
 class ShiftStatusSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.ShiftStatus
         fields = ["id", "name"]
         read_only_fields = ["id"]
-
 
 class ShiftAssignmentSerializer(serializers.ModelSerializer):
     profile = serializers.SlugRelatedField(slug_field="full_name", read_only=True)
@@ -540,7 +528,6 @@ class ShiftAssignmentSerializer(serializers.ModelSerializer):
         model = models.ProfileShiftAssign
         fields = ["id", "profile", "shift", "date", "username"]
         read_only_fields = ["id"]
-
 
 class ShiftNoteSerializer(serializers.ModelSerializer):
     class Meta:
@@ -584,7 +571,6 @@ class ShiftNoteSerializer(serializers.ModelSerializer):
         instance.last_modified_by = last_modified_by
         instance.save()
         return instance
-
 
 class RoomKeepingAssignSerializer(serializers.ModelSerializer):
     room = serializers.SlugRelatedField(
@@ -706,7 +692,6 @@ class RoomKeepingAssignSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
 
-
 class NameTitleSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.NameTitle
@@ -720,15 +705,11 @@ class NameTitleSerializer(serializers.ModelSerializer):
         )
         return title
 
-
-
-
 class PaymentTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.PaymentType
         fields = ["id", "name"]
         read_only_fields = ["id"]
-
 
 class SponsorTypeSerializer(serializers.ModelSerializer):
     class Meta:
@@ -736,13 +717,11 @@ class SponsorTypeSerializer(serializers.ModelSerializer):
         fields = ["id", "name", "allow_credit"]
         read_only_fields = ["id"]
 
-
 class SponsorSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Sponsor
         fields = ["id", "name", "email", "phone_number", "address", "fax"]
         read_only_fields = ["id"]
-
 
 class CountrySerializer(serializers.ModelSerializer):
     class Meta:
@@ -756,8 +735,6 @@ class CountrySerializer(serializers.ModelSerializer):
         )
         return country
     
-
-
 class GuestSerializer(serializers.ModelSerializer):
     title = serializers.SlugRelatedField(
         slug_field="name", queryset=models.NameTitle.objects.all()
@@ -796,7 +773,6 @@ class GuestSerializer(serializers.ModelSerializer):
         guest_id = generators.generate_guest_id()
         guest = models.Guest.objects.create(guest_id=guest_id, **validated_data)
         return guest
-
 
 class BookingSerializer(serializers.ModelSerializer):
     guest = GuestSerializer(write_only=True)
@@ -899,7 +875,6 @@ class BookingSerializer(serializers.ModelSerializer):
             )
             return booking
         
-
 class IdentificationTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.IdentificationType
@@ -987,7 +962,6 @@ class AmenitySerializer(serializers.ModelSerializer):
         instance.save()
         return instance
 
-
 class RoomCategorySerializer(serializers.ModelSerializer):
     amenities = serializers.SlugRelatedField(
         slug_field="name",
@@ -1056,13 +1030,11 @@ class RoomCategorySerializer(serializers.ModelSerializer):
         instance.amenities.set(amenities)
         return instance
 
-
 class BedTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.BedType
         fields = ["id", "name"]
         read_only_fields = ["id"]
-
 
 class RoomTypeSerializer(serializers.ModelSerializer):
     room_category = serializers.SlugRelatedField(
@@ -1153,20 +1125,17 @@ class RoomTypeSerializer(serializers.ModelSerializer):
         instance.bed_types.set(bed_types or instance.bed_types.all())
         return instance
 
-
 class FloorSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.HotelFloor
         fields = ["id", "name"]
         read_only_fields = ["id"]
 
-
 class HotelViewSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.HotelView
         fields = ["id", "name"]
         read_only_fields = ["id"]
-
 
 class RoomSerializer(serializers.ModelSerializer):
     room_type = serializers.SlugRelatedField(
@@ -1300,7 +1269,6 @@ class RoomSerializer(serializers.ModelSerializer):
 
         return instance
 
-
 class AssignComplaintSerializer(serializers.ModelSerializer):
     assigned_to = serializers.PrimaryKeyRelatedField(
         queryset=models.Profile.objects.all(), allow_null=True
@@ -1391,7 +1359,6 @@ class AssignComplaintSerializer(serializers.ModelSerializer):
         instance.hashtags.set(hashtags)
         return instance
 
-
 class ProcessComplaintSerializer(serializers.ModelSerializer):
     complaint_status = serializers.SlugRelatedField(
         slug_field="name", queryset=models.ComplaintStatus.objects.all()
@@ -1473,7 +1440,6 @@ class ProcessComplaintSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
 
-
 class ComplaintSerializer(serializers.ModelSerializer):
     complaint_items = serializers.SlugRelatedField(
         slug_field="name",
@@ -1520,7 +1486,6 @@ class ComplaintSerializer(serializers.ModelSerializer):
             "assigned_complaints",
             "process_complaints",
         ]
-
 
 class PrioritySerializer(serializers.ModelSerializer):
     class Meta:
