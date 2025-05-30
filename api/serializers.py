@@ -113,16 +113,21 @@ class DepartmentSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         with transaction.atomic():
-            department = models.Department.objects.create(**validated_data)
+            created_by = self.context.get("created_by")
+            date_created = timezone.now()
+            department = models.Department.objects.create(**validated_data, 
+                                                          created_by=created_by, 
+                                                          date_created=date_created)
+            
             # create corresponding group
-            Group.objects.get_or_create(**validated_data)
+            Group.objects.get_or_create(name=validated_data.get("name"))
         return department
 
     def update(self, instance, validated_data):
         with transaction.atomic():
             old_name = instance.name
-            new_name = validated_data.get("name")
-            instance.name = new_name
+            instance.name = validated_data.get("name", instance.name)
+            instance.description = validated_data.get("description", instance.description)
             instance.save()
             if old_name != new_name:
                 try:
