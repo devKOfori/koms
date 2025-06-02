@@ -15,16 +15,11 @@ from django.db import transaction
 # Create your models here.
 
 
-
-# Module defaults
-# ROOM_STATUS_DEFAULT = defaults.get_table_default("roomstatus")
-
 class BaseModel(models.Model):
     id = models.UUIDField(default=uuid.uuid4, primary_key=True)
     
     class Meta:
         abstract = True
-
 
 class Department(BaseModel):
     name = models.CharField(max_length=255, unique=True, db_index=True)
@@ -39,18 +34,6 @@ class Department(BaseModel):
 
     class Meta(BaseModel.Meta):
         db_table = "department"
-
-
-class Role(BaseModel):
-    name = models.CharField(max_length=255, unique=True, db_index=True)
-    description = models.TextField(blank=True, null=True)
-
-    def __str__(self):
-        return f'{self.name}'
-
-    class Meta(BaseModel.Meta):
-        db_table = "role"
-
 
 class CustomUser(AbstractBaseUser, BaseModel, PermissionsMixin):
     username = models.CharField(unique=True, max_length=255)
@@ -69,7 +52,6 @@ class CustomUser(AbstractBaseUser, BaseModel, PermissionsMixin):
         db_table = "user"
         verbose_name = "User"
         verbose_name_plural = "Users"
-
 
 class PasswordReset(BaseModel):
     username = models.CharField(max_length=255)
@@ -97,11 +79,9 @@ class PasswordReset(BaseModel):
             "RESET_TOKEN_EXPIRY_DURATION"
         )
 
-
 def profile_photo_upload_path(instance, filename: str):
     ext = os.path.splitext(filename)[1]
     return f"profile_photos/{instance.user.id}{ext}"
-
 
 class Gender(BaseModel):
     name = models.CharField(max_length=10)
@@ -115,7 +95,6 @@ class Gender(BaseModel):
     class Meta(BaseModel.Meta):
         db_table = "gender"
 
-
 class Profile(BaseModel):
     full_name = models.CharField(max_length=255)
     user = models.OneToOneField(
@@ -125,7 +104,7 @@ class Profile(BaseModel):
         Department, on_delete=models.SET_NULL, null=True, related_name="profiles"
     )
     profile_roles = models.ManyToManyField(
-        Role, through="ProfileRole", through_fields=("profile", "role")
+        "Role", through="ProfileRole", through_fields=("profile", "role")
     )
     birthdate = models.DateField(null=True)
     photo = models.ImageField(upload_to=profile_photo_upload_path, null=True)
@@ -145,7 +124,7 @@ class Profile(BaseModel):
         return self.department.name == department_name
 
     def has_role(self, role_name: str) -> bool:
-        return self.profile_roles.filter(name__iexact=role_name).exists()
+        return self.roles.filter(role__name__iexact=role_name, is_active=True).exists()
 
     def has_shift(self, date, shift_name: str) -> bool:
         return self.shifts.filter(date=date, shift__name__iexact=shift_name).exists()
@@ -153,6 +132,15 @@ class Profile(BaseModel):
     class Meta(BaseModel.Meta):
         db_table = "profile"
 
+class Role(BaseModel):
+    name = models.CharField(max_length=255, unique=True, db_index=True)
+    description = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f'{self.name}'
+
+    class Meta(BaseModel.Meta):
+        db_table = "role"
 
 class ProfileRole(BaseModel):
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="roles")
@@ -169,7 +157,6 @@ class ProfileRole(BaseModel):
         verbose_name = "Profile Role"
         verbose_name_plural = "Profile Roles"
 
-
 class Shift(BaseModel):
     name = models.CharField(max_length=255, unique=True)
     start_time = models.TimeField(default=timezone.now)
@@ -183,7 +170,6 @@ class Shift(BaseModel):
     class Meta(BaseModel.Meta):
         db_table = "workshift"
 
-
 class ShiftStatus(BaseModel):
     name = models.CharField(max_length=255)
     change_after_expiry = models.BooleanField(default=False, null=True, blank=True)
@@ -193,7 +179,6 @@ class ShiftStatus(BaseModel):
 
     class Meta(BaseModel.Meta):
         db_table = "shiftstatus"
-
 
 class ProfileShiftAssign(BaseModel):
     department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True)
@@ -232,7 +217,6 @@ class ProfileShiftAssign(BaseModel):
         verbose_name_plural = "Shift Assignments"
         ordering = ["-date"]
 
-
 class ShiftNote(BaseModel):
     assigned_shift = models.OneToOneField(
         ProfileShiftAssign, on_delete=models.CASCADE, related_name="shift_notes"
@@ -262,7 +246,6 @@ class ShiftNote(BaseModel):
         verbose_name = "Shift Note"
         verbose_name_plural = "Shift Notes"
 
-
 class HotelFloor(BaseModel):
     name = models.CharField(max_length=255)
     created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
@@ -273,7 +256,6 @@ class HotelFloor(BaseModel):
 
     class Meta(BaseModel.Meta):
         db_table = "hotelfloor"
-
 
 class HotelView(BaseModel):
     name = models.CharField(max_length=255)
@@ -288,7 +270,6 @@ class HotelView(BaseModel):
         verbose_name = "Hotel View"
         verbose_name_plural = "Hotel Views"
 
-
 class Amenity(BaseModel):
     name = models.CharField(max_length=255, unique=True)
     created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
@@ -301,7 +282,6 @@ class Amenity(BaseModel):
         db_table = "amenities"
         verbose_name = "Amenity"
         verbose_name_plural = "Amenities"
-
 
 class BedType(BaseModel):
     name = models.CharField(max_length=255)
@@ -316,7 +296,6 @@ class BedType(BaseModel):
         verbose_name = "Bed Type"
         verbose_name_plural = "Beds Types"
 
-
 class RoomCategory(BaseModel):
     name = models.CharField(max_length=255, unique=True)
     amenities = models.ManyToManyField(Amenity)
@@ -330,7 +309,6 @@ class RoomCategory(BaseModel):
         db_table = "roomcategory"
         verbose_name = "Room Category"
         verbose_name_plural = "Room Categories"
-
 
 class RoomType(BaseModel):
     name = models.CharField(max_length=255)
@@ -354,7 +332,6 @@ class RoomType(BaseModel):
         db_table = "roomtype"
         verbose_name = "Room Type"
         verbose_name_plural = "Room Types"
-
 
 class Room(BaseModel):
     room_number = models.CharField(max_length=255, db_index=True)
@@ -431,7 +408,6 @@ class Room(BaseModel):
     class Meta(BaseModel.Meta):
         db_table = "room"
 
-
 class RoomStatus(BaseModel):
     name = models.CharField(max_length=255)
 
@@ -440,7 +416,6 @@ class RoomStatus(BaseModel):
 
     class Meta(BaseModel.Meta):
         db_table = "roomstatus"
-
 
 class RoomKeepingAssign(BaseModel):
     room = models.ForeignKey(
@@ -532,7 +507,6 @@ class RoomKeepingAssign(BaseModel):
         verbose_name_plural = "Room Keeping Assignments"
         ordering = ["-date_created"]
 
-
 class HouseKeepingState(BaseModel):
     # options include: pending, ongoing, completed, faulty, request-for-help, confirm-completion
     name = models.CharField(max_length=255)
@@ -552,7 +526,6 @@ class HouseKeepingState(BaseModel):
         verbose_name = "House-Keeping State"
         verbose_name_plural = "House-Keeping States"
 
-
 class ProcessRoomKeeping(BaseModel):
     room_number = models.CharField(max_length=255)
     room_keeping_assign = models.ForeignKey(
@@ -571,51 +544,6 @@ class ProcessRoomKeeping(BaseModel):
         db_table = "processroomkeeping"
         verbose_name = "Process Room Keeping"
         verbose_name_plural = "Process Room Keepings"
-
-
-# class HouseKeepingStateTrans(BaseModel):
-#     # eg. waiting-to-assigned, used-to-waiting, assigned-to-cleaned, cleaned-to-IP, IP-to-used, assigned_to_faulty
-#     name = models.CharField(max_length=255, db_index=True)
-#     initial_trans_state = models.ForeignKey(
-#         HouseKeepingState, on_delete=models.CASCADE, related_name="initial_trans"
-#     )
-#     final_trans_state = models.ForeignKey(
-#         HouseKeepingState, on_delete=models.CASCADE, related_name="final_trans"
-#     )
-#     note = models.CharField(max_length=255, blank=True, null=True)
-#     created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
-#     date_created = models.DateTimeField(auto_now_add=True)
-
-#     def __str__(self):
-#         return f"{self.initial_trans_state} -> {self.final_trans_state}"
-
-#     class Meta(BaseModel.Meta):):
-#         db_table = "housekeepingstatetrans"
-#         verbose_name = "House-Keeping State Transfer"
-#         verbose_name_plural = "House-Keeping State Transfers"
-
-
-# class ProcessRoomKeeping(BaseModel):
-#     room = models.ForeignKey(Room, on_delete=models.CASCADE)
-#     room_keeping_assign = models.ForeignKey(RoomKeepingAssign, on_delete=models.CASCADE)
-#     room_state_trans = models.ForeignKey(
-#         HouseKeepingStateTrans, on_delete=models.SET_NULL, null=True
-#     )
-#     date_processed = models.DateTimeField(default=timezone.now)
-#     shift = models.ForeignKey(Shift, on_delete=models.SET_NULL, null=True)
-#     created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
-#     date_created = models.DateTimeField(auto_now_add=True)
-#     note = models.CharField(max_length=255, blank=True, null=True)
-
-#     def __str__(self):
-#         # returns the final trans state of the room
-#         return f"{self.room} - {self.room_state_trans.final_trans_state.name}"
-
-#     class Meta(BaseModel.Meta):):
-#         db_table = "processroomkeeping"
-#         verbose_name = "Room Keeping"
-#         verbose_name_plural = "Room Keepings"
-
 
 class ProcessRoomKeeping2(BaseModel):
     room_number = models.CharField(max_length=255)
@@ -637,7 +565,6 @@ class ProcessRoomKeeping2(BaseModel):
         verbose_name_plural = "Process Room Keepings"
         ordering = ["-date_created"]
 
-
 class NameTitle(BaseModel):
     name = models.CharField(max_length=255)
     created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
@@ -650,7 +577,6 @@ class NameTitle(BaseModel):
         db_table = "nametitle"
         verbose_name = "Title"
         verbose_name_plural = "Titles"
-
 
 class IdentificationType(BaseModel):
     name = models.CharField(max_length=255)
@@ -677,7 +603,6 @@ class Country(BaseModel):
         db_table = "country"
         verbose_name = "Country"
         verbose_name_plural = "Countries"
-
 
 class Guest(BaseModel):
     guest_id = models.CharField(max_length=255, db_index=True, unique=True)
@@ -716,8 +641,6 @@ class Guest(BaseModel):
     class Meta(BaseModel.Meta):
         db_table = "Guest"
 
-
-# DEFAULT_PAYMENT_TYPE = defaults.get_table_default('paymenttype')
 class PaymentType(BaseModel):
     # eg. cash, credit
     name = models.CharField(max_length=255)
@@ -729,7 +652,6 @@ class PaymentType(BaseModel):
         db_table = "paymenttype"
         verbose_name = "Payment Type"
         verbose_name_plural = "Payment Types"
-
 
 class SponsorType(BaseModel):
     # eg. self, corp, group
@@ -743,7 +665,6 @@ class SponsorType(BaseModel):
         db_table = "sponsortype"
         verbose_name = "Sponsor Type"
         verbose_name_plural = "Sponsor Types"
-
 
 class Sponsor(BaseModel):
     name = models.CharField(max_length=255)
@@ -759,7 +680,6 @@ class Sponsor(BaseModel):
     class Meta(BaseModel.Meta):
         db_table = "sponsor"
 
-
 class PaymentMethod(BaseModel):
     name = models.CharField(max_length=255)
 
@@ -770,7 +690,6 @@ class PaymentMethod(BaseModel):
         db_table = "paymentmethod"
         verbose_name = "Payment Method"
         verbose_name_plural = "Payment Methods"
-
 
 class Receipt(BaseModel):
     issued_to = models.CharField(max_length=255)
@@ -803,7 +722,6 @@ class Receipt(BaseModel):
                 {"error": "available balance on receipt is less than amount to be paid"}
             )
         self.amount_available -= amount
-
 
 class Booking(BaseModel):
     # Guest-related fields
@@ -897,7 +815,6 @@ class Booking(BaseModel):
     class Meta(BaseModel.Meta):
         db_table = "booking"
 
-
 class ArrivalMode(BaseModel):
     name = models.CharField(max_length=255)
 
@@ -909,7 +826,6 @@ class ArrivalMode(BaseModel):
         verbose_name = "Arrival Mode"
         verbose_name_plural = "Arrival Modes"
 
-
 class VIPStatus(BaseModel):
     name = models.CharField(max_length=255)
 
@@ -920,7 +836,6 @@ class VIPStatus(BaseModel):
         db_table = "vipstatus"
         verbose_name = "VIP Status"
         verbose_name_plural = "VIP Statuses"
-
 
 class LoyaltyProgram(BaseModel):
     name = models.CharField(max_length=255)
@@ -935,7 +850,6 @@ class LoyaltyProgram(BaseModel):
         db_table = "loyaltyprogram"
         verbose_name = "Loyalty Program"
         verbose_name_plural = "Loyalty Programs"
-
 
 class GuestLoyaltyPrograms(BaseModel):
     guest = models.ForeignKey(
@@ -954,7 +868,6 @@ class GuestLoyaltyPrograms(BaseModel):
         db_table = "Guestloyaltyprograms"
         verbose_name = "Guest Loyalty Program"
         verbose_name_plural = "Guest Loyalty Programs"
-
 
 class Checkin(BaseModel):
     booking_code = models.CharField(max_length=255, db_index=True)
@@ -1039,7 +952,6 @@ class Checkout(BaseModel):
         verbose_name = "Checkout"
         verbose_name_plural = "Checkouts"
 
-
 class Priority(BaseModel):
     # eg. low, medium, high
     name = models.CharField(max_length=255)
@@ -1051,7 +963,6 @@ class Priority(BaseModel):
         db_table = "priority"
         verbose_name = "Priority"
         verbose_name_plural = "Priorities"
-
 
 class ComplaintStatus(BaseModel):
     # eg. pending, resolved, in-progress
@@ -1065,7 +976,6 @@ class ComplaintStatus(BaseModel):
         verbose_name = "Complaint Status"
         verbose_name_plural = "Complaint Statuses"
 
-
 class Hashtag(BaseModel):
     # eg. #cleaning, #maintenance, #security
     name = models.CharField(max_length=255)
@@ -1077,7 +987,6 @@ class Hashtag(BaseModel):
         db_table = "hashtag"
         verbose_name = "Hashtag"
         verbose_name_plural = "Hashtags"
-
 
 class Complaint(BaseModel):
     guest = models.CharField(max_length=255)
@@ -1106,7 +1015,6 @@ class Complaint(BaseModel):
         db_table = "complaint"
         verbose_name = "Complaint"
         verbose_name_plural = "Complaints"
-
 
 class AssignComplaint(BaseModel):
     complaint = models.ForeignKey(
@@ -1150,7 +1058,6 @@ class AssignComplaint(BaseModel):
         verbose_name_plural = "Assign Complaints"
         ordering = ["-created_on"]
 
-
 class ProcessComplaint(BaseModel):
     complaint = models.ForeignKey(
         Complaint,
@@ -1187,7 +1094,6 @@ class ProcessComplaint(BaseModel):
         verbose_name = "Process Complaint"
         verbose_name_plural = "Process Complaints"
 
-
 class SponsorClaims(BaseModel):
     sponsor = models.ForeignKey(Sponsor, on_delete=models.SET_NULL, null=True)
     guest = models.ForeignKey(Guest, on_delete=models.SET_NULL, null=True)
@@ -1202,7 +1108,6 @@ class SponsorClaims(BaseModel):
         db_table = "sponsorclaims"
         verbose_name = "Sponsor Claim"
         verbose_name_plural = "Sponsor Claims"
-
 
 class PaymentStatus(BaseModel):
     # eg. pending, full-payment, part-payment

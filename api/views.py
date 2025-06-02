@@ -36,6 +36,59 @@ class RegisterAccountView(generics.ListCreateAPIView):
         context["user_profile"] = user_profile
         return context
 
+class AddUserProfileView(generics.CreateAPIView):
+    queryset = models.Profile.objects.all()
+    serializer_class = api_serializers.CustomUserProfileSerializer
+    permission_classes = [IsAuthenticated, custom_permissions.IsAdmin | custom_permissions.IsDepartmentExec, custom_permissions.IsAddingProfileToOwnDepartment]
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        if self.request.user.is_authenticated:
+            try:
+                profile = models.Profile.objects.get(user=self.request.user)
+                context["created_by"] = profile
+            except models.Profile.DoesNotExist:
+                raise serializers.ValidationError({"error": "user account has no profile"})
+        return context
+
+class UserRolesCreateView(generics.CreateAPIView):
+    serializer_class = api_serializers.ProfileRolesSerializer
+    permission_classes = [IsAuthenticated, custom_permissions.IsAdmin | custom_permissions.IsDepartmentExec]
+
+    def get_queryset(self):
+        profile_id = self.kwargs.get("pk")
+        user_profile = get_object_or_404(models.Profile, id=profile_id)
+        queryset = models.ProfileRole.objects.filter(profile=user_profile)
+        return queryset
+    
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["profile_id"] = self.kwargs.get("pk")  
+        if self.request.user.is_authenticated:
+            try:
+                created_by = models.Profile.objects.get(user=self.request.user)
+                context["created_by"] = created_by
+            except models.Profile.DoesNotExist:
+                raise serializers.ValidationError({"error": "user account has no profile"})
+        return context
+    
+class UserRolesListView(generics.ListAPIView):
+    serializer_class = api_serializers.ProfileRolesSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        profile_id = self.kwargs.get("pk")
+        user_profile = get_object_or_404(models.Profile, id=profile_id)
+        queryset = models.ProfileRole.objects.filter(profile=user_profile)
+        return queryset
+
+class UserProfileDetailView(generics.RetrieveAPIView):
+    serializer_class = api_serializers.ProfileViewSerializer
+    lookup_url_kwarg = "pk"
+
+    def get_queryset(self):
+        return models.Profile.objects.prefetch_related("roles")
+    
 
 class AccountChangeView(generics.RetrieveUpdateDestroyAPIView):
     queryset = models.Profile.objects.all()
@@ -213,8 +266,6 @@ class CountryDetail(generics.RetrieveUpdateDestroyAPIView):
     lookup_url_kwarg = "pk"
     permission_classes = [custom_permissions.IsAdminProfileOrReadOnly]
 
-
-
 class CustomUpdateView(APIView):
     def put(self, request, *args, **kwargs):
         serializer = api_serializers.CustomUserProfileSerializer(data=request.data)
@@ -222,11 +273,9 @@ class CustomUpdateView(APIView):
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
 class ShiftList(generics.ListCreateAPIView):
     queryset = models.Shift.objects.all()
     serializer_class = api_serializers.ShiftSerializer
-
 
 class ShiftStatusList(generics.ListCreateAPIView):
     queryset = models.ShiftStatus.objects.all()
@@ -235,7 +284,6 @@ class ShiftStatusList(generics.ListCreateAPIView):
 class IdentificationTypeList(generics.ListCreateAPIView):
     queryset = models.IdentificationType.objects.all()
     serializer_class = api_serializers.IdentificationTypeSerializer
-
 
 class ShiftNoteList(generics.ListCreateAPIView):
     serializer_class = api_serializers.ShiftNoteSerializer
@@ -256,7 +304,6 @@ class ShiftNoteList(generics.ListCreateAPIView):
         context["last_modified_by"] = user_profile
         return context
 
-
 class ShiftNoteDetail(generics.RetrieveUpdateDestroyAPIView):
 
     queryset = models.ShiftNote.objects.all()
@@ -273,7 +320,6 @@ class ShiftNoteDetail(generics.RetrieveUpdateDestroyAPIView):
         context = super().get_serializer_context()
         context["last_modified_by"] = user_profile
         return context
-
 
 class ProfileShiftAssignList(generics.ListCreateAPIView):
     queryset = models.ProfileShiftAssign.objects.all()
@@ -306,7 +352,6 @@ class ProfileShiftAssignList(generics.ListCreateAPIView):
         # print(queryset)
         return queryset
 
-
 def clear_shift_assignments(request):
     print(request.GET)
     shift_date = request.GET.get("shift_date")
@@ -319,14 +364,12 @@ def clear_shift_assignments(request):
     models.ProfileShiftAssign.objects.filter(date=shift_date, shift=shift).delete()
     return Response({"detail": "shift assignments cleared"}, status=status.HTTP_200_OK)
 
-
 class MyShiftList(generics.ListAPIView):
     serializer_class = api_serializers.MyShiftSerializer
 
     def get_queryset(self):
         user_profile = models.Profile.objects.get(user=self.request.user)
         return models.ProfileShiftAssign.objects.filter(profile=user_profile)
-
 
 class ProfileShiftAssignCreateView(generics.ListCreateAPIView):
     queryset = models.ProfileShiftAssign.objects.all()
@@ -340,7 +383,6 @@ class ProfileShiftAssignCreateView(generics.ListCreateAPIView):
         except models.Profile.DoesNotExist:
             raise serializers.ValidationError({"error": "user account has no profile"})
 
-
 class ProfileShiftAssignUpdateView(generics.RetrieveUpdateDestroyAPIView):
     queryset = models.ProfileShiftAssign.objects.all()
     serializer_class = api_serializers.ProfileShiftAssignSerializer
@@ -352,7 +394,6 @@ class ProfileShiftAssignUpdateView(generics.RetrieveUpdateDestroyAPIView):
             return context
         except models.Profile.DoesNotExist:
             raise serializers.ValidationError({"error": "user account has no profile"})
-
 
 # add login required decorator
 @api_view(["POST"])
@@ -386,7 +427,6 @@ def update_assigned_shift_status(request, pk):
     return Response(
         {"detail": "assigned shift status updated"}, status=status.HTTP_200_OK
     )
-
 
 class UpdateAssignedShiftStatus(APIView):
     def post(self, request, pk):
@@ -436,7 +476,6 @@ class UpdateAssignedShiftStatus(APIView):
         return Response(
             {"detail": "assigned shift status updated"}, status=status.HTTP_200_OK
         )
-
 
 class RoomKeepingAssignCreate(generics.ListCreateAPIView):
     queryset = models.RoomKeepingAssign.objects.all()
@@ -499,7 +538,6 @@ class RoomKeepingAssignCreate(generics.ListCreateAPIView):
         context["created_by"] = profile
         return context
 
-
 class RoomKeepingAssignUpdate(generics.UpdateAPIView):
     queryset = models.RoomKeepingAssign.objects.all()
     serializer_class = api_serializers.RoomKeepingAssignSerializer
@@ -515,7 +553,6 @@ class RoomKeepingAssignUpdate(generics.UpdateAPIView):
         context = super().get_serializer_context()
         context["modified_by"] = profile
         return context
-
 
 class UpdateRoomKeepingStatus(APIView):
     def post(self, request, pk):
@@ -624,7 +661,6 @@ class UpdateRoomKeepingStatus(APIView):
         serializer = api_serializers.RoomKeepingAssignSerializer(room_keeping_assign)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-
 class HouseKeepingTaskStaffList(APIView):
     def get(self, request):
         """
@@ -682,7 +718,6 @@ class HouseKeepingTaskStaffList(APIView):
 
         return Response(room_keeping_staff_list, status=status.HTTP_200_OK)
     
-
 class GenderList(generics.ListCreateAPIView):
     queryset = models.Gender.objects.all()
     serializer_class = api_serializers.GenderSerializer
@@ -719,7 +754,6 @@ class BookingList(generics.ListCreateAPIView):
         context["authored_by"] = profile
         return context
 
-
 class BookingExtend(APIView):
     def post(self, request):
         booking_id = request.data.get("booking_id")
@@ -741,7 +775,6 @@ class BookingExtend(APIView):
             {"detail": "booking extended successfully"}, status=status.HTTP_200_OK
         )
 
-
 class BookingDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = models.Booking.objects.all()
     serializer_class = api_serializers.BookingSerializer
@@ -758,7 +791,6 @@ class BookingDetail(generics.RetrieveUpdateDestroyAPIView):
         context = super().get_serializer_context()
         context["authored_by"] = profile
         return context
-
 
 class BookingCheckout(APIView):
     def post(self, request):
@@ -792,7 +824,6 @@ class BookingCheckout(APIView):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-
 class RoomCategoryList(generics.ListCreateAPIView):
     queryset = models.RoomCategory.objects.all()
     serializer_class = api_serializers.RoomCategorySerializer
@@ -809,28 +840,23 @@ class RoomCategoryList(generics.ListCreateAPIView):
         context["authored_by"] = profile
         return context
 
-
 class FloorList(generics.ListCreateAPIView):
     queryset = models.HotelFloor.objects.all()
     serializer_class = api_serializers.FloorSerializer
-
 
 class FloorDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = models.HotelFloor.objects.all()
     serializer_class = api_serializers.FloorSerializer
     lookup_url_kwarg = "pk"
 
-
 class HotelViewList(generics.ListCreateAPIView):
     queryset = models.HotelView.objects.all()
     serializer_class = api_serializers.HotelViewSerializer
-
 
 class HotelViewDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = models.HotelView.objects.all()
     serializer_class = api_serializers.HotelViewSerializer
     lookup_url_kwarg = "pk"
-
 
 class RoomCategoryDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = models.RoomCategory.objects.all()
@@ -849,7 +875,6 @@ class RoomCategoryDetail(generics.RetrieveUpdateDestroyAPIView):
         context["authored_by"] = profile
         return context
 
-
 class RoomTypeList(generics.ListCreateAPIView):
     queryset = models.RoomType.objects.all()
     serializer_class = api_serializers.RoomTypeSerializer
@@ -865,7 +890,6 @@ class RoomTypeList(generics.ListCreateAPIView):
         context = super().get_serializer_context()
         context["authored_by"] = profile
         return context
-
 
 class RoomTypeDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = models.RoomType.objects.all()
@@ -884,7 +908,6 @@ class RoomTypeDetail(generics.RetrieveUpdateDestroyAPIView):
         context["authored_by"] = profile
         return context
 
-
 class RoomList(generics.ListCreateAPIView):
     queryset = models.Room.objects.all()
     serializer_class = api_serializers.RoomSerializer
@@ -900,7 +923,6 @@ class RoomList(generics.ListCreateAPIView):
         context = super().get_serializer_context()
         context["authored_by"] = profile
         return context
-
 
 class RoomDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = models.Room.objects.all()
@@ -919,7 +941,6 @@ class RoomDetail(generics.RetrieveUpdateDestroyAPIView):
         context["authored_by"] = profile
         return context
 
-
 class AmenityDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = models.Amenity.objects.all()
     serializer_class = api_serializers.AmenitySerializer
@@ -937,11 +958,9 @@ class AmenityDetail(generics.RetrieveUpdateDestroyAPIView):
         context["authored_by"] = profile
         return context
 
-
 class ComplaintCreate(generics.ListCreateAPIView):
     queryset = models.Complaint.objects.all()
     serializer_class = api_serializers.ComplaintSerializer
-
 
 class ComplaintList(generics.ListAPIView):
     # queryset = models.Complaint.objects.all()
@@ -976,12 +995,10 @@ class ComplaintList(generics.ListAPIView):
         context["authored_by"] = profile
         return context
 
-
 class ComplaintDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = models.Complaint.objects.all()
     serializer_class = api_serializers.ComplaintSerializer
     lookup_url_kwarg = "pk"
-
 
 class AssignComplaintList(generics.ListCreateAPIView):
     queryset = models.AssignComplaint.objects.all()
@@ -998,7 +1015,6 @@ class AssignComplaintList(generics.ListCreateAPIView):
         context = super().get_serializer_context()
         context["authored_by"] = profile
         return context
-
 
 class AssignComplaintDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = models.AssignComplaint.objects.all()
@@ -1017,7 +1033,6 @@ class AssignComplaintDetail(generics.RetrieveUpdateDestroyAPIView):
         context["authored_by"] = profile
         return context
 
-
 class ProcessComplaintList(generics.ListCreateAPIView):
     queryset = models.ProcessComplaint.objects.all()
     serializer_class = api_serializers.ProcessComplaintSerializer
@@ -1033,7 +1048,6 @@ class ProcessComplaintList(generics.ListCreateAPIView):
         context = super().get_serializer_context()
         context["authored_by"] = profile
         return context
-
 
 class ProcessComplaintDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = models.ProcessComplaint.objects.all()
@@ -1051,7 +1065,6 @@ class ProcessComplaintDetail(generics.RetrieveUpdateDestroyAPIView):
         context = super().get_serializer_context()
         context["authored_by"] = profile
         return context
-
 
 class AmenityList(generics.ListCreateAPIView):
     serializer_class = api_serializers.AmenitySerializer
@@ -1082,7 +1095,6 @@ class AmenityList(generics.ListCreateAPIView):
         context["authored_by"] = profile
         return context
 
-
 class AmenityDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = models.Amenity.objects.all()
     serializer_class = api_serializers.AmenitySerializer
@@ -1099,7 +1111,6 @@ class AmenityDetail(generics.RetrieveUpdateDestroyAPIView):
         context = super().get_serializer_context()
         context["authored_by"] = profile
         return context
-
 
 class RoomAmenityList(APIView):
     def get(self, request):
@@ -1124,11 +1135,9 @@ class RoomAmenityList(APIView):
         serializer = api_serializers.AmenitySerializer(amenities, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-
 class PriorityList(generics.ListCreateAPIView):
     queryset = models.Priority.objects.all()
     serializer_class = api_serializers.PrioritySerializer
-
 
 class GuestList(generics.ListCreateAPIView):
     queryset = models.Guest.objects.all()
@@ -1144,7 +1153,6 @@ class GuestList(generics.ListCreateAPIView):
         context = super().get_serializer_context()
         context["created_by"] = user_profile
         return context
-
 
 class GuestDetails(generics.RetrieveUpdateDestroyAPIView):
     queryset = models.Guest.objects.all()

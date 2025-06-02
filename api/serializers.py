@@ -18,7 +18,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     """
 
     def validate(self, attrs):
-        print("here...")
+        print(f"{self}...")
         data = super().validate(attrs=attrs)
         user = self.user
         refresh = self.get_token(user=user)
@@ -53,53 +53,24 @@ class CustomTokenBlacklistSerializer(TokenBlacklistSerializer):
         data = super().validate(attrs=attrs)
 
 class CustomUserSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(
+        write_only=True, required=True)
     class Meta:
         model = models.CustomUser
-        fields = ["id", "username", "first_name", "last_name"]
+        fields = ["id", "username", "first_name", "last_name", "password"]
         read_only_fields = ["id"]
-        extra_kwargs = {
-            "password": {"write_only": True},
-        }
-
-    # def validate_username(self, value: str):
-    #     # print("here.......")
-    #     user_model = get_user_model()
-    #     if self.instance:
-    #         if (
-    #             user_model.objects.filter(username=value)
-    #             .exclude(id=self.instance.id)
-    #             .exists()
-    #         ):
-    #             raise serializers.ValidationError(
-    #                 "User with this username already exists."
-    #             )
-    #     else:
-    #         # For creation, ensure the username is unique
-    #         if user_model.objects.filter(username=value).exists():
-    #             raise serializers.ValidationError(
-    #                 "User with this username already exists."
-    #             )
-    #     return value
-
-class RoleSerializer(serializers.ModelSerializer):
+        
+class GenderSerializer(serializers.ModelSerializer):
     class Meta:
-        model = models.Role
-        fields = ["id", "name", "description"]
+        model = models.Gender
+        fields = ["id", "name"]
         read_only_fields = ["id"]
 
     def create(self, validated_data):
-        with transaction.atomic():
-            role = models.Role.objects.create(**validated_data)
-            Group.objects.get_or_create(name=validated_data.get("name"))
-        return role
-
-    def update(self, instance: models.Role, validated_data)->models.Role:
-        with transaction.atomic():
-            old_name = instance.name
-            instance.name = validated_data.get("name", instance.name)
-            instance.save()
-            Group.objects.update_or_create(name=old_name, defaults={"name": validated_data.get("name")})
-        return instance
+        created_by = self.context.get("created_by")
+        gender = models.Gender.objects.create(**validated_data, 
+                                              created_by=created_by)
+        return gender
 
 class DepartmentSerializer(serializers.ModelSerializer):
     class Meta:
@@ -122,8 +93,36 @@ class DepartmentSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         with transaction.atomic():
             old_name = instance.name
-            instance.name = validated_data.get("name", instance.name)
+            new_name = validated_data.get("name", old_name)
+            instance.name = new_name
             instance.description = validated_data.get("description", instance.description)
+            instance.save()
+            if old_name != new_name:
+                try:
+                    group = Group.objects.get(name=old_name)
+                    group.name = new_name
+                    group.save()
+                except Group.DoesNotExist:
+                    Group.objects.create(name=new_name)
+        return instance
+
+class RoleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.Role
+        fields = ["id", "name", "description"]
+        read_only_fields = ["id"]
+
+    def create(self, validated_data):
+        with transaction.atomic():
+            role = models.Role.objects.create(**validated_data)
+            Group.objects.get_or_create(name=validated_data.get("name"))
+        return role
+
+    def update(self, instance: models.Role, validated_data)->models.Role:
+        with transaction.atomic():
+            old_name = instance.name
+            new_name = validated_data.get("name", old_name)
+            instance.name = new_name
             instance.save()
             if old_name != new_name:
                 try:
@@ -145,165 +144,69 @@ class ProfileRolesSerializer(serializers.ModelSerializer):
         fields = ["id", "role", "is_active"]
         read_only_fields = ["id"]
 
-class GenderSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = models.Gender
-        fields = ["id", "name"]
-        read_only_fields = ["id"]
-
     def create(self, validated_data):
-        created_by = self.context.get("created_by")
-        gender = models.Gender.objects.create(**validated_data, 
-                                              created_by=created_by)
-        return gender
+        created_by = self.context["created_by"]
+        print(f"ProfileRolesSerializer: {self.context}")
+        profile = models.Profile.objects.get(id=self.context["profile_id"])
+        profile_role = models.ProfileRole.objects.create(
+            profile=profile,
+            created_by=created_by,
+            **validated_data
+        )
+        group_name = validated_data.get("role").name
+        group, created = Group.objects.get_or_create(name=group_name)
+        profile.user.groups.add(group)
+        return profile_role
 
 class CustomUserProfileSerializer(serializers.ModelSerializer):
     user = CustomUserSerializer()
-
-    roles = ProfileRolesSerializer(many=True)
-    department = serializers.CharField(max_length=255)
-    gender = serializers.CharField(max_length=255)
+    department = serializers.SlugRelatedField(
+        slug_field="name", queryset=models.Department.objects.all()
+    )
+    gender = serializers.SlugRelatedField(
+        slug_field="name", queryset=models.Gender.objects.all()
+    )
 
     class Meta:
         model = models.Profile
         fields = [
             "id",
-            "full_name",
             "user",
-            "department",
-            "roles",
+            "gender",
             "birthdate",
-            "photo",
             "phone_number",
             "email",
             "residential_address",
-            "gender",
+            "photo",
+            "full_name",
+            "department",
         ]
         read_only_fields = ["id", "full_name"]
-
+    
     def create(self, validated_data):
-        created_by = self.context["user_profile"]
+        print(validated_data)
+        created_by: models.Profile = self.context.get("created_by")
         user_data = validated_data.pop("user")
 
-        department_data = validated_data.pop("department")
-        roles_data = validated_data.pop("roles")
-        gender_data = validated_data.pop("gender")
-
-        try:
-            department = models.Department.objects.get(name__iexact=department_data)
-            gender = models.Gender.objects.get(name__iexact=gender_data)
-        except models.Department.DoesNotExist:
-            raise serializers.ValidationError({"error": "invalid department provided"})
-        except models.Gender.DoesNotExist:
-            raise serializers.ValidationError({"error": "invalid gender provided"})
 
         with transaction.atomic():
-            # create user account
-            user = models.CustomUser.objects.create_user(**user_data)
-
-            # create user profile
+            user: models.CustomUser = models.CustomUser.objects.create_user(
+                username=user_data.get("username"),
+                first_name=user_data.get("first_name", ""),
+                last_name=user_data.get("last_name", ""),
+                password=user_data.get("password"),
+            )
             user_profile = models.Profile.objects.create(
-                user=user,
-                full_name=f"{user_data.get('first_name')} {user_data.get('last_name')}",
-                department=department,
-                gender=gender,
-                created_by=created_by,
                 **validated_data,
+                user=user,
+                full_name=f"{user.first_name} {user.last_name}",
+                created_by=created_by
             )
-            roles = [role_data["role"] for role_data in roles_data]
-            # models.ProfileRole.objects.bulk_create(
-            #     [
-            #         models.ProfileRole(profile=user_profile, role=role, is_active=True)
-            #         for role in roles
-            #     ]
-            # )
-            # build a list containing the names of roles and dept which is used to search for the groups to which the user is added
-            group_names_list = [role.name for role in roles]
-            group_names_list.append(department_data)
-            # set profile roles
-            helpers.set_profile_roles(profile=user_profile, roles_data=roles_data)
-            # set profile groups
-            helpers.set_profile_groups(
-                profile=user_profile, group_names_list=group_names_list
-            )
-
         return user_profile
-
-    def update(self, instance, validated_data):
-        with transaction.atomic():
-            print("here.....999..")
-            user = instance.user
-            user_data = validated_data.pop("user", {})
-            for attr, value in user_data.items():
-                if attr == "username":
-                    # Skip validation if the username is not changed
-                    if value != user.username:
-                        if models.CustomUser.objects.filter(username=value).exists():
-                            raise serializers.ValidationError(
-                                {
-                                    "user": {
-                                        "username": "User with this username already exists."
-                                    }
-                                }
-                            )
-                elif attr == "password":
-                    user.set_password(value)
-                else:
-                    setattr(user, attr, value)
-            user.save()
-
-            existing_department = instance.department
-            department_data = validated_data.pop("department")
-            existing_gender = instance.gender
-            gender_data = validated_data.pop("gender")
-            try:
-                new_department = models.Department.objects.get(
-                    name__iexact=department_data
-                )
-                instance.department = new_department or existing_department
-                new_gender = models.Gender.objects.get(gender=gender_data)
-                instance.gender = new_gender or existing_gender
-            except models.Department.DoesNotExist:
-                raise serializers.ValidationError(
-                    {"error": "invalid department provided"}
-                )
-            except models.Gender.DoesNotExist:
-                raise serializers.ValidationError({"error": "invalid gender provided"})
-
-            for attr, value in validated_data.items():
-                setattr(instance, attr, value)
-
-            full_name = f"{user_data.get('first_name')} {user_data.get('last_name')}"
-            instance.full_name = full_name or instance.full_name
-            instance.save()
-
-            # Update roles
-            roles_data = validated_data.pop("roles", [])
-            if roles_data:
-                # Clear existing roles and add new ones
-                # instance.roles.clear()
-                # roles = models.Role.objects.filter(
-                #     name__in=[role_data['role'] for role_data in roles_data]
-                # )
-                helpers.set_profile_roles(profile=instance, roles_data=roles_data)
-                roles = [role_data["name"] for role_data in roles_data]
-                # models.ProfileRole.objects.bulk_create(
-                #     [
-                #         models.ProfileRole(
-                #             profile=instance,
-                #             role=role,
-                #             is_active=role_data.get('is_active', True),
-                #         )
-                #         for role, role_data in zip(roles, roles_data)
-                #     ]
-                # )
-                group_names_list = [role.name for role in roles]
-                group_names_list.append(department_data)
-                helpers.set_profile_groups(
-                    profile=instance, group_names_list=group_names_list
-                )
-
-            return instance
+      
+class ProfileViewSerializer(serializers.Serializer):
+    user = CustomUserSerializer()
+    roles = ProfileRolesSerializer(many=True)  
 
 class PasswordResetSerializer(serializers.ModelSerializer):
     class Meta:
