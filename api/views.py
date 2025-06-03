@@ -90,16 +90,13 @@ class UserProfileDetailView(generics.RetrieveAPIView):
     def get_queryset(self):
         return models.Profile.objects.prefetch_related("roles")
     
-
 class AccountChangeView(generics.RetrieveUpdateDestroyAPIView):
     queryset = models.Profile.objects.all()
     print("Custom serializer is being used!")
     serializer_class = api_serializers.CustomUserProfileSerializer
 
-
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = api_serializers.CustomTokenObtainPairSerializer
-
 
 class LogoutView(TokenBlacklistView):
     serializer_class = api_serializers.TokenBlacklistSerializer
@@ -188,7 +185,6 @@ class PasswordChangeView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-
 class MyDepartmentStaffList(generics.ListAPIView):
     serializer_class = api_serializers.CustomUserProfileSerializer
 
@@ -200,17 +196,14 @@ class MyDepartmentStaffList(generics.ListAPIView):
             raise exceptions.ValidationError({"error": "user account not found"})
         return models.Profile.objects.filter(department=department)
 
-
 class BedTypeList(generics.ListCreateAPIView):
     queryset = models.BedType.objects.all()
     serializer_class = api_serializers.BedTypeSerializer
-
 
 class BedTypeDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = models.BedType.objects.all()
     serializer_class = api_serializers.BedTypeSerializer
     lookup_url_kwarg = "pk"
-
 
 class PasswordResetView(generics.CreateAPIView):
     queryset = models.PasswordReset.objects.all()
@@ -265,16 +258,15 @@ class CompletePasswordResetView(APIView):
                 {"error": "Invalid reset ID"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
 class ProfileList(generics.ListCreateAPIView):
     queryset = models.Profile.objects.all()
     serializer_class = api_serializers.CustomUserProfileSerializer
-
 
 class ProfileDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = models.Profile.objects.all()
     serializer_class = api_serializers.CustomUserProfileSerializer
     lookup_url_kwarg = "pk"
-
 
 class RoleList(generics.ListCreateAPIView):
     queryset = models.Role.objects.all()
