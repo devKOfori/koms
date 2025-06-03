@@ -142,28 +142,49 @@ class LogoutView3(APIView):
                 )
 
 class PasswordChangeView(APIView):
+    permission_classes = [IsAuthenticated]
     def post(self, request):
         try:
-            print(request.user)
-            user_profile = models.Profile.objects.get(user=request.user)
-            user = user_profile.user
-            # password match verification to be done at the frontend
+            user: models.CustomUser = request.user
+            _ = request.user.profile
 
+            old_password = request.data.get("old_password")
             new_password = request.data.get("new_password", None)
-            if not new_password:
+            confirm_new_password = request.data.get("confirm_new_password", None)
+
+            if not user.check_password(old_password):
                 return Response(
-                    {"error": "new password not specified"},
+                        {"error": "The old password is incorrect"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if not new_password or not confirm_new_password:
+                return Response(
+                    {"error": "new password and confirm new password are required"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if new_password != confirm_new_password:
+                return Response(
+                    {"error": "new password and confirm new password do not match"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if not helpers.is_valid_password(new_password):
+                return Response(
+                    {
+                        "error": "password not valid"
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             user.set_password(new_password)
             user.save()
             return Response(
-                {"detail": "password changed successfull"},
+                {"detail": "password changed successfully"},
                 status=status.HTTP_200_OK,
             )
         except models.Profile.DoesNotExist:
             return Response(
-                {"error": "user account not found"}, status=status.HTTP_400_BAD_REQUEST
+                {"error": "user profile does not exist"},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
 
