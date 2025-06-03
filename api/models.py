@@ -248,9 +248,10 @@ class ShiftNote(BaseModel):
         verbose_name_plural = "Shift Notes"
 
 class HotelFloor(BaseModel):
-    name = models.CharField(max_length=255)
+    name = models.CharField(max_length=255, unique=True)
     created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
     date_created = models.DateTimeField(auto_now_add=True)
+    description = models.TextField(blank=True, null=True)
 
     def __str__(self):
         return self.name
@@ -259,9 +260,10 @@ class HotelFloor(BaseModel):
         db_table = "hotelfloor"
 
 class HotelView(BaseModel):
-    name = models.CharField(max_length=255)
+    name = models.CharField(max_length=255, unique=True) # e.g. Sea View, City View, etc.
     created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
     date_created = models.DateTimeField(auto_now_add=True)
+    description = models.TextField(blank=True, null=True)
 
     def __str__(self):
         return self.name
@@ -275,6 +277,8 @@ class Amenity(BaseModel):
     name = models.CharField(max_length=255, unique=True)
     created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
     date_created = models.DateTimeField(auto_now_add=True)
+    icon = models.ImageField(upload_to="amenities_icons", null=True, blank=True)
+    description = models.TextField(blank=True, null=True)
 
     def __str__(self):
         return self.name
@@ -285,9 +289,10 @@ class Amenity(BaseModel):
         verbose_name_plural = "Amenities"
 
 class BedType(BaseModel):
-    name = models.CharField(max_length=255)
+    name = models.CharField(max_length=255, unique=True) # King, Queen, Twin, etc.
     created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
     date_created = models.DateTimeField(auto_now_add=True)
+    description = models.TextField(blank=True, null=True)
 
     def __str__(self):
         return self.name
@@ -298,7 +303,7 @@ class BedType(BaseModel):
         verbose_name_plural = "Beds Types"
 
 class RoomCategory(BaseModel):
-    name = models.CharField(max_length=255, unique=True)
+    name = models.CharField(max_length=255, unique=True) # e.g. Small, Medium, Large, etc.
     amenities = models.ManyToManyField(Amenity)
     created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
     date_created = models.DateTimeField(auto_now_add=True)
@@ -312,17 +317,14 @@ class RoomCategory(BaseModel):
         verbose_name_plural = "Room Categories"
 
 class RoomType(BaseModel):
-    name = models.CharField(max_length=255)
+    name = models.CharField(max_length=255, unique=True) # e.g. Single, Double, Suite, Deluxe, Executive, Premium, Presidential, etc.
     room_category = models.ForeignKey(
         RoomCategory, on_delete=models.SET_NULL, null=True, related_name="room_types"
     )
-    area_in_meters = models.DecimalField(max_digits=4, decimal_places=1, default=0.0)
-    area_in_feet = models.DecimalField(max_digits=4, decimal_places=1, default=0.0)
-    max_guests = models.IntegerField(default=1)
-    bed_types = models.ManyToManyField(BedType)
-    view = models.ForeignKey(HotelView, on_delete=models.SET_NULL, null=True)
-    amenities = models.ManyToManyField(Amenity)
-    rate = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    room_area = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    max_occupancy = models.IntegerField(default=0)
+    amenities = models.ManyToManyField(Amenity, related_name="room_types")
+    base_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
     date_created = models.DateTimeField(auto_now_add=True)
 
@@ -346,16 +348,10 @@ class Room(BaseModel):
     bed_type = models.ForeignKey(
         BedType, on_delete=models.SET_NULL, null=True, related_name="rooms"
     )
-    rate = models.DecimalField(max_digits=6, decimal_places=2, default=0.00)
-    max_guests = models.PositiveIntegerField(default=1, null=True)
+    max_occupancy = models.IntegerField(default=0)
     is_occupied = models.BooleanField(default=False)
-    created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
-    date_created = models.DateTimeField(auto_now_add=True)
-    # room_status = models.ForeignKey(
-    #     "RoomStatus",
-    #     on_delete=models.SET_DEFAULT,
-    #     default=ROOM_STATUS_DEFAULT,
-    # )
+    is_available = models.BooleanField(default=True)
+    is_cleaned = models.BooleanField(default=True)
     room_maintenance_status = models.CharField(
         max_length=255,
         choices=choices.ROOM_MAINTENANCE_STATUS_CHOICES,
@@ -364,7 +360,10 @@ class Room(BaseModel):
     room_booking_status = models.CharField(
         max_length=255, choices=choices.ROOM_BOOKING_STATUS_CHOICES, default="default"
     )
-    amenities = models.ManyToManyField(Amenity, related_name="rooms")
+    amenities = models.ManyToManyField(Amenity, through="RoomAmenity", related_name="rooms")
+    current_guest = models.ForeignKey("Guest", on_delete=models.SET_NULL, null=True, blank=True)
+    date_created = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
 
     def __str__(self):
         return self.room_number
@@ -408,6 +407,68 @@ class Room(BaseModel):
 
     class Meta(BaseModel.Meta):
         db_table = "room"
+
+class RoomAmenity(BaseModel):
+    room = models.ForeignKey(
+        Room, on_delete=models.CASCADE, related_name="room_amenities"
+    )
+    amenity = models.ForeignKey(
+        Amenity, on_delete=models.CASCADE, related_name="room_amenities"
+    )
+    quantity = models.IntegerField(default=1)
+    created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
+    date_created = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.room} - {self.amenity}"
+
+    class Meta(BaseModel.Meta):
+        db_table = "roomamenity"
+        verbose_name = "Room Amenity"
+        verbose_name_plural = "Room Amenities"
+
+class RoomRate(BaseModel):
+    room_type = models.ForeignKey(
+        RoomType, on_delete=models.CASCADE, related_name="room_rates"
+    )
+    start_date = models.DateField(default=timezone.now)
+    end_date = models.DateField(default=timezone.now)
+    price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    discount = models.DecimalField(
+        max_digits=5, decimal_places=2, default=0.00, blank=True, null=True
+    )
+    notes = models.TextField(blank=True, null=True)
+    created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
+    date_created = models.DateTimeField(auto_now_add=True)
+    last_modified_by = models.ForeignKey(
+        Profile, on_delete=models.SET_NULL, null=True, related_name="modified_room_rates"
+    )
+    date_modified = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.room_type} - {self.start_date} to {self.end_date} - {self.price}"
+    
+    class Meta(BaseModel.Meta):
+        db_table = "roomrate"
+        verbose_name = "Room Rate"
+        verbose_name_plural = "Room Rates"
+
+class RoomImage(BaseModel):
+    room = models.ForeignKey(
+        Room, on_delete=models.CASCADE, related_name="room_images"
+    )
+    image = models.ImageField(upload_to="room_images")
+    caption = models.TextField(blank=True, null=True)
+    created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
+    date_created = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.room} - {self.image.name}"
+
+    class Meta(BaseModel.Meta):
+        db_table = "roomimage"
+        verbose_name = "Room Image"
+        verbose_name_plural = "Room Images"
 
 class RoomStatus(BaseModel):
     name = models.CharField(max_length=255)
