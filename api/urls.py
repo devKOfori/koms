@@ -108,9 +108,6 @@ urlpatterns = [
         views.HouseKeepingTaskStaffList.as_view(),
         name="house_keeping_staff",
     ),
-    # urls for amenities management
-    path("amenities/", views.AmenityList.as_view(), name="amenities"),
-    path("amenities/<uuid:pk>/", views.AmenityDetail.as_view(), name="amenity_details"),
     # urls for room category management
     path("room-categories/", views.RoomCategoryList.as_view(), name="room_categories"),
     path(
@@ -167,8 +164,10 @@ urlpatterns = [
         name="process_complaint_details",
     ),
     # urls for amenity management
-    path("amenities/", views.AmenityList.as_view(), name="amenities"),
-    path("amenities/<uuid:pk>/", views.AmenityDetail.as_view(), name="amenity_details"),
+    path("amenities/", views.AmenityListView.as_view(), name="amenities_list"),
+    path("amenities/add/", views.AmenityCreateView.as_view(), name="add_amenity"),
+    path("amenities/<uuid:pk>/edit/", views.AmenityUpdateDeleteView.as_view(), name="edit_amenity"),
+    path("amenities/<uuid:pk>/", views.AmenityRetrieveView.as_view(), name="amenity_details"),
     # urls for bed management
     path("bed-types/", views.BedTypeList.as_view(), name="bed_types"),
     path(

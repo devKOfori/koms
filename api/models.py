@@ -122,7 +122,7 @@ class Profile(BaseModel):
         return self.full_name
 
     def is_member_of(self, department_name: str) -> bool:
-        return self.department.name == department_name
+        return self.department.name.casefold() == department_name.casefold()
 
     def has_role(self, role_name: str) -> bool:
         return self.roles.filter(role__name__iexact=role_name, is_active=True).exists()

@@ -1,5 +1,5 @@
 from rest_framework.permissions import BasePermission, SAFE_METHODS
-from .models import Profile, Department
+from .models import Profile, Department, CustomUser
 class IsAuthenticatedOrReadOnly(BasePermission):
     """
     Custom permission to only allow authenticated users to edit objects.
@@ -106,11 +106,12 @@ class CanAddNewUserToDepartment(BasePermission):
     
 
 class CanViewUserProfileRoles(BasePermission):
-    def has_permission(self, request, view):
-        if not request.user or not request.user.is_authenticated:
+    def has_permission(self, request, view) -> bool:
+        user: CustomUser = request.user
+        if not user or not user.is_authenticated:
             return False
         try:
-            profile = request.user.profile
+            profile = user.profile
             if not profile.roles.exists() or profile.has_role("Staff"):
                 return False
         except Profile.DoesNotExist:
@@ -121,3 +122,32 @@ class CanViewUserProfileRoles(BasePermission):
             profile.has_role("Supervisor") or
             profile.has_
         )
+    
+class IsHouseKeepingStaff(BasePermission):
+    def has_permission(self, request, view):
+        """
+        Custom permission to allow access only to users with the 'House Keeping' role.
+        This permission is used to restrict access to views that require house keeping privileges.
+        """
+        try:
+            profile: Profile = request.user.profile
+        except Profile.DoesNotExist:
+            return False
+        
+        return profile.is_member_of("Housekeeping")
+    
+class IsHouseKeepingStaffOrReadOnly(BasePermission):
+    def has_permission(self, request, view):
+        """
+        Custom permission to allow read-only access for all users,
+        but restrict write access to house keeping staff or admin users.
+        """
+        if request.method in SAFE_METHODS:
+            return True
+        
+        try:
+            profile: Profile = request.user.profile
+        except Profile.DoesNotExist:
+            return False
+        
+        return profile.is_member_of("Housekeeping") or profile.has_role("Admin")

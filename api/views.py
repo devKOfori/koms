@@ -17,12 +17,25 @@ from rest_framework.decorators import api_view
 from datetime import datetime
 from django.utils import timezone
 from rest_framework_simplejwt.views import TokenBlacklistView
+from rest_framework.mixins import UpdateModelMixin, DestroyModelMixin
 from . import custom_permissions
 from .mixins import CreatedByMixin
 
-
-
 # Create your views here.
+
+class UpdateDeleteView(UpdateModelMixin, DestroyModelMixin, generics.GenericAPIView):
+    def patch(self, request, *args, **kwargs):
+        self.check_object_permissions(request, self.get_object())
+        return self.partial_update(request, *args, **kwargs)
+    
+    def put(self, request, *args, **kwargs):
+        self.check_object_permissions(request, self.get_object())
+        return self.update(request, *args, **kwargs)
+    
+    def delete(self, request, *args, **kwargs):
+        self.check_object_permissions(request, self.get_object())
+        return self.destroy(request, *args, **kwargs)
+
 class RegisterAccountView(generics.ListCreateAPIView):
     queryset = models.Profile.objects.all()
     serializer_class = api_serializers.CustomUserProfileSerializer
@@ -1004,22 +1017,15 @@ class RoomDetail(generics.RetrieveUpdateDestroyAPIView):
         context["authored_by"] = profile
         return context
 
-class AmenityDetail(generics.RetrieveUpdateDestroyAPIView):
+class AmenityUpdateDeleteView(CreatedByMixin, UpdateDeleteView):
     queryset = models.Amenity.objects.all()
     serializer_class = api_serializers.AmenitySerializer
     lookup_url_kwarg = "pk"
 
-    def get_serializer_context(self):
-        try:
-            profile = models.Profile.objects.get(user=self.request.user)
-        except models.Profile.DoesNotExist:
-            return Response(
-                {"error": "user profile does not exist"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        context = super().get_serializer_context()
-        context["authored_by"] = profile
-        return context
+class AmenityRetrieveView(generics.RetrieveAPIView):
+    queryset = models.Amenity.objects.all()
+    serializer_class = api_serializers.AmenitySerializer
+    permission_classes = [IsAuthenticated]
 
 class ComplaintCreate(generics.ListCreateAPIView):
     queryset = models.Complaint.objects.all()
@@ -1129,51 +1135,22 @@ class ProcessComplaintDetail(generics.RetrieveUpdateDestroyAPIView):
         context["authored_by"] = profile
         return context
 
-class AmenityList(generics.ListCreateAPIView):
+class AmenityListView(generics.ListAPIView):
     serializer_class = api_serializers.AmenitySerializer
-
-    def get_queryset(self):
-        room_number = self.request.GET.get("room_number", None)
-        print(f"Room number: {room_number}")
-        if room_number and room_number is not None:
-            print("Room number exists")
-            queryset = models.Amenity.objects.filter(
-                rooms__room_number__iexact=room_number
-            )
-        else:
-            queryset = models.Amenity.objects.all()
-        print(f"Queryset: {queryset}")
-        return queryset
-
-    def get_serializer_context(self):
-        print(f"self.request.user: ${self.request.user}")
-        try:
-            profile = models.Profile.objects.get(user=self.request.user)
-        except models.Profile.DoesNotExist:
-            return Response(
-                {"error": "user profile does not exist"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        context = super().get_serializer_context()
-        context["authored_by"] = profile
-        return context
-
-class AmenityDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = models.Amenity.objects.all()
-    serializer_class = api_serializers.AmenitySerializer
-    lookup_url_kwarg = "pk"
+    permission_classes = [IsAuthenticated]
 
-    def get_serializer_context(self):
-        try:
-            profile = models.Profile.objects.get(user=self.request.user)
-        except models.Profile.DoesNotExist:
-            return Response(
-                {"error": "user profile does not exist"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        context = super().get_serializer_context()
-        context["authored_by"] = profile
-        return context
+class AmenityCreateView(CreatedByMixin, generics.CreateAPIView):
+    serializer_class = api_serializers.AmenitySerializer
+    queryset = models.Amenity.objects.all()
+    permission_classes = [custom_permissions.IsHouseKeepingStaff | custom_permissions.IsAdmin, custom_permissions.IsDepartmentExec]
+
+
+class AmenityEditView(CreatedByMixin, generics.UpdateAPIView):
+    serializer_class = api_serializers.AmenitySerializer
+    queryset = models.Amenity.objects.all()
+    permission_classes = [custom_permissions.IsHouseKeepingStaff, custom_permissions.IsDepartmentExec]
+
 
 class RoomAmenityList(APIView):
     def get(self, request):

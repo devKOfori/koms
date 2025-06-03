@@ -796,51 +796,9 @@ class CheckInSerializer(serializers.ModelSerializer):
 class AmenitySerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Amenity
-        fields = ["id", "name"]
-        read_only_fields = ["id"]
+        fields = ["id", "name", "description", "created_by", "date_created"]
+        read_only_fields = ["id", "created_by", "date_created"]
 
-    def create(self, validated_data):
-        created_by = self.context.get("authored_by")
-        # if not helpers.check_profile_department(
-        #     profile=created_by, department_name="Housekeeping"
-        # ):
-        if not created_by.is_member_of("Housekeeping"):
-            raise serializers.ValidationError(
-                {
-                    "error": "only house keeping staff are authorized to complete this action"
-                }
-            )
-        # if not helpers.check_profile_role(profile=created_by, role_name="Supervisor"):
-        if not created_by.has_role("Supervisor"):
-            raise serializers.ValidationError(
-                {
-                    "error": "only supervisors in house keeping are authorized to complete this action"
-                }
-            )
-        return models.Amenity.objects.create(created_by=created_by, **validated_data)
-
-    def update(self, instance, validated_data):
-        modified_by = self.context.get("authored_by")
-        # if not helpers.check_profile_department(
-        #     profile=modified_by, department_name="Housekeeping"
-        # ):
-        if not modified_by.is_member_of("Housekeeping"):
-            raise serializers.ValidationError(
-                {
-                    "error": "only house keeping staff are authorized to complete this action"
-                }
-            )
-        # if not helpers.check_profile_role(profile=modified_by, role_name="Supervisor"):
-        if not modified_by.has_role("Supervisor"):
-            raise serializers.ValidationError(
-                {
-                    "error": "only supervisors in house keeping are authorized to complete this action"
-                }
-            )
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
-        return instance
 
 class RoomCategorySerializer(serializers.ModelSerializer):
     amenities = serializers.SlugRelatedField(
