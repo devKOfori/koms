@@ -210,11 +210,23 @@ class MyDepartmentStaffList(generics.ListAPIView):
             raise exceptions.ValidationError({"error": "user account not found"})
         return models.Profile.objects.filter(department=department)
 
-class BedTypeList(generics.ListCreateAPIView):
+class BedTypeCreateView(CreatedByMixin, generics.CreateAPIView):
     queryset = models.BedType.objects.all()
     serializer_class = api_serializers.BedTypeSerializer
+    permission_classes = [custom_permissions.IsHouseKeepingStaff | custom_permissions.IsAdmin, custom_permissions.IsDepartmentExec]
 
-class BedTypeDetail(generics.RetrieveUpdateDestroyAPIView):
+class BedTypeListView(generics.ListAPIView):
+    queryset = models.BedType.objects.all()
+    serializer_class = api_serializers.BedTypeSerializer
+    permission_classes = [IsAuthenticated]
+
+class BedTypeUpdateDeleteView(UpdateDeleteView):
+    queryset = models.BedType.objects.all()
+    serializer_class = api_serializers.BedTypeSerializer
+    lookup_url_kwarg = "pk"
+    permission_classes = [custom_permissions.IsHouseKeepingStaff | custom_permissions.IsAdmin, custom_permissions.IsDepartmentExec]
+
+class BedTypeDetail(generics.RetrieveAPIView):
     queryset = models.BedType.objects.all()
     serializer_class = api_serializers.BedTypeSerializer
     lookup_url_kwarg = "pk"
@@ -1017,17 +1029,10 @@ class RoomDetail(generics.RetrieveUpdateDestroyAPIView):
         context["authored_by"] = profile
         return context
 
-class AmenityUpdateDeleteView(CreatedByMixin, UpdateDeleteView):
-    queryset = models.Amenity.objects.all()
-    serializer_class = api_serializers.AmenitySerializer
-    lookup_url_kwarg = "pk"
-
-class AmenityRetrieveView(generics.RetrieveAPIView):
+class ComplaintCreate(generics.ListCreateAPIView):
     queryset = models.Amenity.objects.all()
     serializer_class = api_serializers.AmenitySerializer
     permission_classes = [IsAuthenticated]
-
-class ComplaintCreate(generics.ListCreateAPIView):
     queryset = models.Complaint.objects.all()
     serializer_class = api_serializers.ComplaintSerializer
 
@@ -1123,6 +1128,12 @@ class ProcessComplaintDetail(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = api_serializers.ProcessComplaintSerializer
     lookup_url_kwarg = "pk"
 
+class AmenityUpdateDeleteView(CreatedByMixin, UpdateDeleteView):
+    queryset = models.Amenity.objects.all()
+    serializer_class = api_serializers.AmenitySerializer
+    lookup_url_kwarg = "pk"
+
+class AmenityRetrieveView(generics.RetrieveAPIView):
     def get_serializer_context(self):
         try:
             profile = models.Profile.objects.get(user=self.request.user)
@@ -1144,13 +1155,6 @@ class AmenityCreateView(CreatedByMixin, generics.CreateAPIView):
     serializer_class = api_serializers.AmenitySerializer
     queryset = models.Amenity.objects.all()
     permission_classes = [custom_permissions.IsHouseKeepingStaff | custom_permissions.IsAdmin, custom_permissions.IsDepartmentExec]
-
-
-class AmenityEditView(CreatedByMixin, generics.UpdateAPIView):
-    serializer_class = api_serializers.AmenitySerializer
-    queryset = models.Amenity.objects.all()
-    permission_classes = [custom_permissions.IsHouseKeepingStaff, custom_permissions.IsDepartmentExec]
-
 
 class RoomAmenityList(APIView):
     def get(self, request):

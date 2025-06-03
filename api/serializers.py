@@ -799,7 +799,6 @@ class AmenitySerializer(serializers.ModelSerializer):
         fields = ["id", "name", "description", "created_by", "date_created"]
         read_only_fields = ["id", "created_by", "date_created"]
 
-
 class RoomCategorySerializer(serializers.ModelSerializer):
     amenities = serializers.SlugRelatedField(
         slug_field="name",
@@ -871,8 +870,8 @@ class RoomCategorySerializer(serializers.ModelSerializer):
 class BedTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.BedType
-        fields = ["id", "name"]
-        read_only_fields = ["id"]
+        fields = ["id", "name", "description", "created_by", "date_created"]
+        read_only_fields = ["id", "created_by", "date_created"]
 
 class RoomTypeSerializer(serializers.ModelSerializer):
     room_category = serializers.SlugRelatedField(
@@ -968,7 +967,6 @@ class FloorSerializer(serializers.ModelSerializer):
         model = models.HotelFloor
         fields = ["id", "name", "description", "created_by", "date_created"]
         read_only_fields = ["id", "created_by", "date_created"]
-
 
 class HotelViewSerializer(serializers.ModelSerializer):
     class Meta:

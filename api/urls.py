@@ -169,10 +169,10 @@ urlpatterns = [
     path("amenities/<uuid:pk>/edit/", views.AmenityUpdateDeleteView.as_view(), name="edit_amenity"),
     path("amenities/<uuid:pk>/", views.AmenityRetrieveView.as_view(), name="amenity_details"),
     # urls for bed management
-    path("bed-types/", views.BedTypeList.as_view(), name="bed_types"),
-    path(
-        "bed-types/<uuid:pk>/", views.BedTypeDetail.as_view(), name="bed_type_details"
-    ),
+    path("bedtypes/", views.BedTypeListView.as_view(), name="bed_types"),
+    path("bedtypes/add/", views.BedTypeCreateView.as_view(), name="add_bed_type"),
+    path("bedtypes/<uuid:pk>/edit/", views.BedTypeUpdateDeleteView.as_view(), name="edit_bed_type"),
+    path("bedtypes/<uuid:pk>/", views.BedTypeDetail.as_view(), name="bed_type_details"),
     # urls for floor management
     path("floors/", views.FloorList.as_view(), name="floors"),
     path("floors/<uuid:pk>/", views.FloorDetail.as_view(), name="floor_details"),
