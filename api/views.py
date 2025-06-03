@@ -912,7 +912,7 @@ class FloorDetail(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = api_serializers.FloorSerializer
     lookup_url_kwarg = "pk"
 
-class HotelViewList(generics.ListCreateAPIView):
+class HotelViewList(CreatedByMixin, generics.ListCreateAPIView):
     queryset = models.HotelView.objects.all()
     serializer_class = api_serializers.HotelViewSerializer
 

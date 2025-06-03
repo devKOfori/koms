@@ -1015,8 +1015,8 @@ class FloorSerializer(serializers.ModelSerializer):
 class HotelViewSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.HotelView
-        fields = ["id", "name"]
-        read_only_fields = ["id"]
+        fields = ["id", "name", "description", "created_by", "date_created"]
+        read_only_fields = ["id", "created_by", "date_created"]
 
 class RoomSerializer(serializers.ModelSerializer):
     room_type = serializers.SlugRelatedField(
