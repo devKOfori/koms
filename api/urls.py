@@ -26,6 +26,10 @@ urlpatterns = [
         views.PasswordResetView.as_view(),
         name="reset_password",
     ),
+    path("accounts/reset-password/complete/",
+        views.CompletePasswordResetView.as_view(),
+        name="complete_password_reset"
+    ),
     path(
         "accounts/my-department-staff/",
         views.MyDepartmentStaffList.as_view(),

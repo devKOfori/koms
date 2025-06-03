@@ -11,6 +11,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from . import serializers as api_serializers
 from . import models
 from django.db.models import Q
+from django.db import transaction
 from utils import helpers
 from rest_framework.decorators import api_view
 from datetime import datetime
@@ -215,7 +216,55 @@ class PasswordResetView(generics.CreateAPIView):
     queryset = models.PasswordReset.objects.all()
     serializer_class = api_serializers.PasswordResetSerializer
 
-
+class CompletePasswordResetView(APIView):
+    def post(self, request, *args, **kwargs):
+        """
+        Complete the password reset process by validating the token and updating the user's password.
+        """
+        reset_id = request.data.get("reset_id")
+        filter = Q(reset_code=reset_id) | Q(reset_token=reset_id)
+        try:
+            password_reset: models.PasswordReset = models.PasswordReset.objects.get(filter)
+            if password_reset.is_used or password_reset.expiry_date < timezone.now():
+                return Response(
+                    {"error": "This reset link has expired or has already been used."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            new_password = request.data.get("new_password")
+            confirm_new_password = request.data.get("confirm_new_password")
+            if not new_password or not confirm_new_password:
+                return Response(
+                    {"error": "new password and confirm new password are required"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if new_password != confirm_new_password:
+                return Response(
+                    {"error": "new password and confirm new password do not match"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if not helpers.is_valid_password(new_password):
+                return Response(
+                    {
+                        "error": "password not valid"
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            with transaction.atomic():
+                user = password_reset.user
+                user.set_password(new_password)
+                user.save()
+                password_reset.is_used = True
+                password_reset.save()
+                models.PasswordReset.objects.filter(user=user, is_used=False).update(is_used=True)
+                return Response(
+                    {"detail": "Password reset successful"},
+                    status=status.HTTP_200_OK,
+                )
+        except models.PasswordReset.DoesNotExist:
+            return Response(
+                {"error": "Invalid reset ID"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 class ProfileList(generics.ListCreateAPIView):
     queryset = models.Profile.objects.all()
     serializer_class = api_serializers.CustomUserProfileSerializer

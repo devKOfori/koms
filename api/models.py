@@ -56,16 +56,17 @@ class CustomUser(AbstractBaseUser, BaseModel, PermissionsMixin):
 class PasswordReset(BaseModel):
     username = models.CharField(max_length=255)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    token = models.CharField(max_length=255, db_index=True)
-    date_created = models.DateTimeField(auto_now_add=True)
-    is_used = models.BooleanField(default=False)
+    reset_token = models.CharField(max_length=255, null=True, blank=True)
+    reset_code = models.CharField(max_length=255, null=True, blank=True)
     reset_channel = models.CharField(
         max_length=30, choices=choices.PASSWORD_RESET_CHANNEL_CHOICES
     )
+    date_created = models.DateTimeField(auto_now_add=True)
     expiry_date = models.DateTimeField(default=timezone.now)
+    is_used = models.BooleanField(default=False)
 
     def __str__(self):
-        return self.token
+        return f"{self.username} - {self.reset_token or self.reset_code}"
 
     class Meta(BaseModel.Meta):
         db_table = "passwordreset"

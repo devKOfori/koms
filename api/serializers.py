@@ -221,69 +221,46 @@ class PasswordResetSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["date_created", "is_used", "expiry_date", "user"]
 
-    def validate_username(self, data):
-        if not models.CustomUser.objects.filter(username=data).exists():
+    def create(self, validated_data):
+        username: str = validated_data.get("username")
+        reset_channel: str = validated_data.get("reset_channel")
+        reset_channel = reset_channel.casefold()
+        reset_token, reset_code = None, None
+        try:
+            user_profile = models.Profile.objects.select_related("user").get(user__username=username)    
+            if reset_channel=="email":
+                if not user_profile.email:
+                    raise serializers.ValidationError(
+                        {"error": "The user does not have an email address set."},
+                        code=status.HTTP_400_BAD_REQUEST,
+                    )
+                else: 
+                    reset_token = generators.generate_password_reset_token()
+            if reset_channel=="sms":
+                if not user_profile.phone_number:
+                    raise serializers.ValidationError(
+                        {"error": "The user does not have a phone number set."},
+                        code=status.HTTP_400_BAD_REQUEST,
+                    )
+                else:
+                    reset_code = generators.generate_password_reset_code()
+                    print(f"reset_code: {reset_code}")
+            print(f"reset_token: {reset_token}")
+            instance = models.PasswordReset.objects.create(
+                username=username,
+                user=user_profile.user,
+                reset_token=reset_token,
+                reset_channel=reset_channel,
+                reset_code=reset_code,
+                expiry_date=timezone.now() + timedelta(days=system_variables.PASSWORD_RESET.get("RESET_EXPIRY_DURATION", 2)),
+                is_used=False
+            )
+            return instance
+        except models.Profile.DoesNotExist:
             raise serializers.ValidationError(
-                {"error": "no account with the provided username exist"},
+                {"error": f"Profile with username '{username}' does not exist."},
                 code=status.HTTP_400_BAD_REQUEST,
             )
-
-        return data
-
-    def create(self, validated_data):
-        # print('Username in validated_data:', validated_data['username'])
-        user_account = models.CustomUser.objects.get(
-            username=validated_data.get("username")
-        )
-        user_profile = models.Profile.objects.get(user=user_account)
-        reset_channel = validated_data.get("reset_channel")
-        token = generators.generate_password_reset_token()
-
-        with transaction.atomic():
-            instance = models.PasswordReset.objects.create(
-                user=user_account,
-                token=token,
-                is_used=False,
-                reset_channel=reset_channel,
-                expiry_date=timezone.now()
-                + timedelta(
-                    hours=system_variables.PASSWORD_RESET.get(
-                        "RESET_TOKEN_EXPIRY_DURATION"
-                    )
-                ),
-            )
-
-            # if reset_channel == 'email':
-            #     try:
-            #         if not user_profile.email:
-            #             raise serializers.ValidationError(
-            #                 {'error': 'user account has no email'}
-            #             )
-            #         notifications.send_email(
-            #             **system_variables.PASSWORD_RESET.get('RESET_LINK_EMAIL_CONF'),
-            #             to_email=[user_profile.email],
-            #         )
-            #     except Exception as e:
-            #         raise serializers.ValidationError(
-            #             {'error': 'Could not send token to your email'},
-            #             code=status.HTTP_400_BAD_REQUEST,
-            #         )
-            # else:
-            #     try:
-            #         if not user_profile.phone_number:
-            #             raise serializers.ValidationError(
-            #                 {'error': 'user account has no phone number'}
-            #             )
-            #         notifications.send_SMS(
-            #             **system_variables.PASSWORD_RESET.get('RESET_LINK_EMAIL_CONF'),
-            #             to=user_profile.phone_number,
-            #         )
-            #     except Exception as e:
-            #         raise serializers.ValidationError(
-            #             {'error': 'Could not send token to phone number'},
-            #             code=status.HTTP_400_BAD_REQUEST,
-            #         )
-        return instance
 
 class ShiftSerializer(serializers.ModelSerializer):
     class Meta:
