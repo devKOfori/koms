@@ -18,6 +18,7 @@ from datetime import datetime
 from django.utils import timezone
 from rest_framework_simplejwt.views import TokenBlacklistView
 from . import custom_permissions
+from .mixins import CreatedByMixin
 
 
 
@@ -902,7 +903,7 @@ class RoomCategoryList(generics.ListCreateAPIView):
         context["authored_by"] = profile
         return context
 
-class FloorList(generics.ListCreateAPIView):
+class FloorList(CreatedByMixin, generics.ListCreateAPIView):
     queryset = models.HotelFloor.objects.all()
     serializer_class = api_serializers.FloorSerializer
 

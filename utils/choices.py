@@ -1,7 +1,7 @@
 ROOM_MAINTENANCE_STATUS_CHOICES = [
     ("default", "Default"),
     ("cleaned", "Cleaned"),
-    ("used", "Used"),
+    ("under-maintenance", "Under-maintenance"),
     ("broken", "Broken"),
 ]
 

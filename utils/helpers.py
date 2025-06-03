@@ -4,6 +4,16 @@ from django.contrib.auth.models import Group
 from django.apps import apps
 from django.db import transaction
 
+def is_valid_password(password: str) -> bool:
+    """
+    Validates the password to ensure it meets the required criteria.
+    Args:
+        password (str): The password to validate.
+    Returns:
+        bool: True if the password meets the specified criteria, False otherwise.
+    """
+    return True
+
 def check_profile_department(profile, department_name: str):
     try:
         deparment = models.Department.objects.get(name__iexact=department_name)

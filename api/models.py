@@ -254,7 +254,7 @@ class HotelFloor(BaseModel):
     description = models.TextField(blank=True, null=True)
 
     def __str__(self):
-        return self.name
+        return f"{self.name}"
 
     class Meta(BaseModel.Meta):
         db_table = "hotelfloor"
