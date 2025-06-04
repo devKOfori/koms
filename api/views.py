@@ -230,6 +230,7 @@ class BedTypeDetail(generics.RetrieveAPIView):
     queryset = models.BedType.objects.all()
     serializer_class = api_serializers.BedTypeSerializer
     lookup_url_kwarg = "pk"
+    permission_classes = [IsAuthenticated]
 
 class PasswordResetView(generics.CreateAPIView):
     queryset = models.PasswordReset.objects.all()
@@ -912,21 +913,28 @@ class BookingCheckout(APIView):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-class RoomCategoryList(generics.ListCreateAPIView):
+class RoomCategoryCreateView(CreatedByMixin, generics.CreateAPIView):
     queryset = models.RoomCategory.objects.all()
     serializer_class = api_serializers.RoomCategorySerializer
+    permission_classes = [custom_permissions.IsHouseKeepingStaff | custom_permissions.IsAdmin, custom_permissions.IsDepartmentExec]
 
-    def get_serializer_context(self):
-        try:
-            profile = models.Profile.objects.get(user=self.request.user)
-        except models.Profile.DoesNotExist:
-            return Response(
-                {"error": "user profile does not exist"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        context = super().get_serializer_context()
-        context["authored_by"] = profile
-        return context
+class RoomCategoryUpdateDeleteView(UpdateDeleteView):
+    queryset = models.RoomCategory.objects.all()
+    serializer_class = api_serializers.RoomCategorySerializer
+    lookup_url_kwarg = "pk"
+    permission_classes = [custom_permissions.IsHouseKeepingStaff | custom_permissions.IsAdmin, custom_permissions.IsDepartmentExec]
+
+class RoomCategoryList(generics.ListAPIView):
+    queryset = models.RoomCategory.objects.all()
+    serializer_class = api_serializers.RoomCategorySerializer
+    permission_classes = [custom_permissions.IsHouseKeepingStaff | custom_permissions.IsAdmin, custom_permissions.IsDepartmentExec]
+
+class RoomCategoryRetrieveView(generics.RetrieveAPIView):
+    queryset = models.RoomCategory.objects.all()
+    serializer_class = api_serializers.RoomCategorySerializer
+    lookup_url_kwarg = "pk"
+    permission_classes = [custom_permissions.IsHouseKeepingStaff | custom_permissions.IsAdmin, custom_permissions.IsDepartmentExec]
+
 
 class FloorList(CreatedByMixin, generics.ListCreateAPIView):
     queryset = models.HotelFloor.objects.all()

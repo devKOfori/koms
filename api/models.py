@@ -307,6 +307,7 @@ class RoomCategory(BaseModel):
     amenities = models.ManyToManyField(Amenity)
     created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
     date_created = models.DateTimeField(auto_now_add=True)
+    description = models.TextField(blank=True, null=True)
 
     def __str__(self):
         return self.name

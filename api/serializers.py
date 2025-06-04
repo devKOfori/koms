@@ -809,63 +809,26 @@ class RoomCategorySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = models.RoomCategory
-        fields = ["id", "name", "amenities"]
-        read_only_fields = [
-            "id",
-        ]
+        fields = ["id", "name", "amenities", "description", "created_by", "date_created"]
+        read_only_fields = ["id", "created_by", "date_created"]
 
     def create(self, validated_data):
-        created_by = self.context.get("authored_by")
-        # if not helpers.check_profile_department(
-        #     profile=created_by, department_name="housekeeping"
-        # ):
-        if not created_by.is_member_of("Housekeeping"):
-            raise serializers.ValidationError(
-                {
-                    "error": "only house keeping staff are authorized to complete this action"
-                }
-            )
-        # if not helpers.check_profile_role(profile=created_by, role_name="Supervisor"):
-        if not created_by.has_role("Supervisor"):
-            raise serializers.ValidationError(
-                {
-                    "error": "only supervisors in house keeping are authorized to complete this action"
-                }
-            )
-
         amenities = validated_data.pop("amenities", [])
-        room_category = models.RoomCategory.objects.create(
-            created_by=created_by, **validated_data
-        )
-        room_category.amenities.set(amenities)
-        return room_category
+        with transaction.atomic():
+            room_category = models.RoomCategory.objects.create(
+                created_by=created_by, **validated_data
+            )
+            room_category.amenities.set(amenities)
+            return room_category
 
     def update(self, instance, validated_data):
-        modified_by = self.context.get("authored_by")
-        # if not helpers.check_profile_department(
-        #     profile=modified_by, department_name="housekeeping"
-        # ):
-        if not modified_by.is_member_of("Housekeeping"):
-            raise serializers.ValidationError(
-                {
-                    "error": "only house keeping staff are authorized to complete this action"
-                }
-            )
-        # if not helpers.check_profile_role(profile=modified_by, role_name="Supervisor"):
-        if not modified_by.has_role("Supervisor"):
-            raise serializers.ValidationError(
-                {
-                    "error": "only supervisors in house keeping are authorized to complete this action"
-                }
-            )
         amenities = validated_data.pop("amenities", [])
-        print(amenities)
         for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
-        # instance.amenities.set(amenities or instance.amenities.all())
-        instance.amenities.set(amenities)
-        return instance
+            if hasattr(instance, attr):
+                setattr(instance, attr, value)
+        with transaction.atomic():
+            instance.save()
+            instance.amenities.set(amenities)
 
 class BedTypeSerializer(serializers.ModelSerializer):
     class Meta:
