@@ -971,7 +971,7 @@ class RoomCategoryDetail(generics.RetrieveUpdateDestroyAPIView):
         context["authored_by"] = profile
         return context
 
-class RoomTypeList(generics.ListCreateAPIView):
+class RoomTypeListView(generics.ListCreateAPIView):
     queryset = models.RoomType.objects.all()
     serializer_class = api_serializers.RoomTypeSerializer
 
@@ -987,22 +987,22 @@ class RoomTypeList(generics.ListCreateAPIView):
         context["authored_by"] = profile
         return context
 
-class RoomTypeDetail(generics.RetrieveUpdateDestroyAPIView):
+class RoomTypeRetrieveView(generics.RetrieveUpdateDestroyAPIView):
     queryset = models.RoomType.objects.all()
     serializer_class = api_serializers.RoomTypeSerializer
     lookup_url_kwarg = "pk"
+    permission_classes = [IsAuthenticated]
 
-    def get_serializer_context(self):
-        try:
-            profile = models.Profile.objects.get(user=self.request.user)
-        except models.Profile.DoesNotExist:
-            return Response(
-                {"error": "user profile does not exist"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        context = super().get_serializer_context()
-        context["authored_by"] = profile
-        return context
+class RoomTypeCreateView(CreatedByMixin, generics.CreateAPIView):
+    queryset = models.RoomType.objects.all()
+    serializer_class = api_serializers.RoomTypeSerializer
+    permission_classes = [custom_permissions.IsHouseKeepingStaff | custom_permissions.IsAdmin, custom_permissions.IsDepartmentExec]
+
+class RoomTypeUpdateDeleteView(UpdateDeleteView):
+    queryset = models.RoomType.objects.all()
+    serializer_class = api_serializers.RoomTypeSerializer
+    lookup_url_kwarg = "pk"
+    permission_classes = [custom_permissions.IsHouseKeepingStaff | custom_permissions.IsAdmin, custom_permissions.IsDepartmentExec]
 
 class RoomList(generics.ListCreateAPIView):
     queryset = models.Room.objects.all()

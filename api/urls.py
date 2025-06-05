@@ -124,10 +124,14 @@ urlpatterns = [
         name="room_category_details",
     ),
     # urls for room type management
-    path("room-types/", views.RoomTypeList.as_view(), name="room_types"),
+    path("room-types/", views.RoomTypeListView.as_view(), name="room_types"),
+    path("room-types/add/", views.RoomTypeCreateView.as_view(), name="add_room_type"),
+    path(
+        "room-types/<uuid:pk>/edit/", views.RoomTypeUpdateDeleteView.as_view(), name="edit_room_type"
+    ),
     path(
         "room-types/<uuid:pk>/",
-        views.RoomTypeDetail.as_view(),
+        views.RoomTypeRetrieveView.as_view(),
         name="room_type_details",
     ),
     # urls for room management
