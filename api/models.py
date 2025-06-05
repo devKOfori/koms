@@ -319,9 +319,6 @@ class RoomCategory(BaseModel):
 
 class RoomType(BaseModel):
     name = models.CharField(max_length=255, unique=True) # e.g. Single, Double, Suite, Deluxe, Executive, Premium, Presidential, etc.
-    room_category = models.ForeignKey(
-        RoomCategory, on_delete=models.SET_NULL, null=True, related_name="room_types"
-    )
     room_area = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     max_occupancy = models.IntegerField(default=0)
     amenities = models.ManyToManyField(Amenity, related_name="room_types")
