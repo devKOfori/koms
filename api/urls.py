@@ -114,7 +114,7 @@ urlpatterns = [
     path("amenities/<uuid:pk>/", views.AmenityRetrieveView.as_view(), name="amenity_details"),
     # urls for room category management
     path("room-categories/", views.RoomCategoryList.as_view(), name="room_categories"),
-    path("room-categories/add", views.RoomCategoryCreateView.as_view(), name="add_room_category"),
+    path("room-categories/add/", views.RoomCategoryCreateView.as_view(), name="add_room_category"),
     path(
     "room-categories/<uuid:pk>/edit", views.RoomCategoryRetrieveView.as_view(), name="edit_room_category"
     ),
@@ -135,8 +135,10 @@ urlpatterns = [
         name="room_type_details",
     ),
     # urls for room management
-    path("rooms/", views.RoomList.as_view(), name="rooms"),
-    path("rooms/<uuid:pk>/", views.RoomDetail.as_view(), name="room_details"),
+    path("rooms/", views.RoomListView.as_view(), name="rooms"),
+    path("rooms/add/", views.RoomCreateView.as_view(), name="add_room"),
+    path("rooms/<uuid:pk>/", views.RoomRetrieveView.as_view(), name="room_details"),
+    path("rooms/<uuid:pk>/edit/", views.RoomUpdateDeleteView.as_view(), name="edit_room"),
     path("room-amenities/", views.RoomAmenityList.as_view(), name="room_amenities"),
     # urls for booking management
     path("bookings/", views.BookingList.as_view(), name="bookings"),
