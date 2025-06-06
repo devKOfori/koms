@@ -1199,31 +1199,28 @@ class PriorityList(generics.ListCreateAPIView):
     queryset = models.Priority.objects.all()
     serializer_class = api_serializers.PrioritySerializer
 
-class GuestList(generics.ListCreateAPIView):
+class GuestListView(generics.ListAPIView):
     queryset = models.Guest.objects.all()
     serializer_class = api_serializers.GuestSerializer
+    permission_classes = [IsAuthenticated]
 
-    def get_serializer_context(self):
-        try:
-            user_profile = self.request.user.profile
-        except models.Profile.DoesNotExist:
-            return Response(
-                {"error": "User not authenticated"}, status=status.HTTP_400_BAD_REQUEST
-            )
-        context = super().get_serializer_context()
-        context["created_by"] = user_profile
-        return context
-
-class GuestDetails(generics.RetrieveUpdateDestroyAPIView):
+class GuestCreateView(CreatedByMixin, generics.CreateAPIView):
     queryset = models.Guest.objects.all()
     serializer_class = api_serializers.GuestSerializer
-    lookup_url_kwarg = "guest_id"
+    permission_classes = [custom_permissions.IsFrontDeskStaff | custom_permissions.IsAdmin]
 
-    def get_object(self):
-        obj = self.get_serializer().Meta.model.objects.get(
-            guest_id=self.kwargs.get("guest_id")
-        )
-        return obj
+class GuestUpdateDeleteView(UpdateDeleteView):
+    queryset = models.Guest.objects.all()
+    serializer_class = api_serializers.GuestSerializer
+    lookup_url_kwarg = "pk"
+    permission_classes = [custom_permissions.IsFrontDeskStaff | custom_permissions.IsAdmin]
+
+class GuestRetrieveView(generics.RetrieveAPIView):
+    queryset = models.Guest.objects.all()
+    serializer_class = api_serializers.GuestSerializer
+    lookup_url_kwarg = "pk"
+    permission_classes = [IsAuthenticated]
+
 
 class NameTitleListView(generics.ListAPIView):
     queryset = models.NameTitle.objects.all()

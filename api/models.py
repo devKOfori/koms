@@ -42,6 +42,7 @@ class CustomUser(AbstractBaseUser, BaseModel, PermissionsMixin):
     is_staff = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     email = models.EmailField(blank=True, null=True)
+    user_category = models.CharField(max_length=30, choices=choices.USER_CATEGORY_CHOICES, null=True, blank=True)
 
     USERNAME_FIELD = "username"
     REQUIRED_FIELDS = ["first_name", "last_name"]
@@ -675,6 +676,8 @@ class Guest(BaseModel):
     title = models.ForeignKey(
         NameTitle, on_delete=models.SET_NULL, null=True, blank=True
     )
+    user = models.OneToOneField(
+        CustomUser, on_delete=models.SET_NULL, null=True, related_name="guest_profile")
     first_name = models.CharField(max_length=255)
     last_name = models.CharField(max_length=255)
     gender = models.ForeignKey(Gender, on_delete=models.SET_NULL, null=True, blank=True)
@@ -689,9 +692,10 @@ class Guest(BaseModel):
     country = models.ForeignKey(Country, on_delete=models.SET_NULL, null=True, blank=True)
     emergency_contact_name = models.CharField(max_length=255, blank=True, null=True)
     emergency_contact_phone = models.CharField(max_length=255, blank=True, null=True)
-    loyalty_programs = models.ManyToManyField(
-        "LoyaltyProgram", through="GuestLoyaltyPrograms", related_name="guests"
+    created_by = models.ForeignKey(
+        Profile, on_delete=models.SET_NULL, null=True, related_name="guests_created"
     )
+    date_created = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return (

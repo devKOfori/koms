@@ -638,8 +638,25 @@ class GuestSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         guest_id = generators.generate_guest_id()
-        guest = models.Guest.objects.create(guest_id=guest_id, **validated_data)
-        return guest
+        first_name = validated_data["first_name"]
+        last_name = validated_data["last_name"]
+        with transaction.atomic():
+            guest_user = get_user_model().objects.create_user(
+                username=f"{first_name.lower()}.{last_name.lower()}",
+                first_name=first_name,
+                last_name=last_name,
+                password=f"{first_name.lower()}.{last_name.lower()}{guest_id[-4:]}", 
+                is_staff=False,
+                is_active=False,
+                email=validated_data.get("email", ""),
+                user_category="guest",
+            )
+            guest = models.Guest.objects.create(
+                **validated_data,
+                guest_id=guest_id,
+                user=guest_user,
+            )
+            return guest
 
 class BookingSerializer(serializers.ModelSerializer):
     guest = GuestSerializer(write_only=True)

@@ -102,11 +102,6 @@ urlpatterns = [
         views.UpdateRoomKeepingStatus.as_view(),
         name="change_room_keeping_status",
     ),
-    # path(
-    #     "house-keeping/process/",
-    #     views.ProcessRoomKeeping.as_view(),
-    #     name="process_roomkeeping",
-    # ),
     path(
         "house-keeping/staff",
         views.HouseKeepingTaskStaffList.as_view(),
@@ -200,8 +195,10 @@ urlpatterns = [
 
     # urls for guests management
     
-    path("guests/", views.GuestList.as_view(), name="guests"),
-    path("guests/<str:guest_id>/", views.GuestDetails.as_view(), name="guest_details"),
+    path("guests/", views.GuestListView.as_view(), name="guests"),
+    path("guests/add/", views.GuestCreateView.as_view(), name="add_guest"),
+    path("guests/<uuid:pk>/edit/", views.GuestUpdateDeleteView.as_view(), name="edit_guest"),
+    path("guests/<uuid:pk>/", views.GuestRetrieveView.as_view(), name="guest_details"),
     
     path("identification-types/", views.IdentificationTypeListView.as_view(), name='identification_types'),
     path("identification-types/add/", views.IdentificationTypeCreateView.as_view(), name='add_identification_type'),
