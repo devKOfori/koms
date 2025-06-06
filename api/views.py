@@ -1207,23 +1207,24 @@ class GuestDetails(generics.RetrieveUpdateDestroyAPIView):
         )
         return obj
 
-class NameTitleList(generics.ListCreateAPIView):
+class NameTitleListView(generics.ListAPIView):
     queryset = models.NameTitle.objects.all()
     serializer_class = api_serializers.NameTitleSerializer
-    permission_classes = [custom_permissions.IsAdminProfileOrReadOnly]
+    permission_classes = [IsAuthenticated]
 
-    def get_serializer_context(self):
-        context = super().get_serializer_context()
-        if self.request.user.is_authenticated:
-            try:
-                profile = models.Profile.objects.get(user=self.request.user)
-                context["created_by"] = profile
-            except models.Profile.DoesNotExist:
-                raise serializers.ValidationError({"error": "user account has no profile"})
-        return context
-    
-class NameTitleDetail(generics.RetrieveUpdateDestroyAPIView):
+class NameTitleCreateView(CreatedByMixin, generics.CreateAPIView):
+    queryset = models.NameTitle.objects.all()
+    serializer_class = api_serializers.NameTitleSerializer
+    permission_classes = [custom_permissions.IsFrontDeskStaff | custom_permissions.IsAdmin]
+
+class NameTitleUpdateDeleteView(UpdateDeleteView):
     queryset = models.NameTitle.objects.all()
     serializer_class = api_serializers.NameTitleSerializer
     lookup_url_kwarg = "pk"
-    permission_classes = [custom_permissions.IsAdminProfileOrReadOnly]
+    permission_classes = [custom_permissions.IsFrontDeskStaff | custom_permissions.IsAdmin]
+
+class NameTitleRetrieveView(generics.RetrieveAPIView):
+    queryset = models.NameTitle.objects.all()
+    serializer_class = api_serializers.NameTitleSerializer
+    lookup_url_kwarg = "pk"
+    permission_classes = [IsAuthenticated]

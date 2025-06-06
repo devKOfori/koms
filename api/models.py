@@ -629,6 +629,7 @@ class ProcessRoomKeeping2(BaseModel):
 
 class NameTitle(BaseModel):
     name = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
     created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
     date_created = models.DateTimeField(auto_now_add=True)
 

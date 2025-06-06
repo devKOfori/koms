@@ -52,8 +52,10 @@ urlpatterns = [
     path("genders/", views.GenderList.as_view(), name='genders'),
     path("genders/<uuid:pk>/", views.GenderDetail.as_view(), name="gender_details"),
 
-    path("titles/", views.NameTitleList.as_view(), name="titles"),
-    path("titles/<uuid:pk>/", views.NameTitleDetail.as_view(), name="title_details"),
+    path("titles/", views.NameTitleListView.as_view(), name="titles"),
+    path("titles/add/", views.NameTitleCreateView.as_view(), name="add_title"),
+    path("titles/<uuid:pk>/edit/", views.NameTitleUpdateDeleteView.as_view(), name="edit_title"),
+    path("titles/<uuid:pk>/", views.NameTitleRetrieveView.as_view(), name="title_details"),
 
     path("shifts/", views.ShiftList.as_view(), name="shifts"),
     path("my-shifts/", views.MyShiftList.as_view(), name="my_shifts"),
