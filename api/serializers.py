@@ -609,11 +609,6 @@ class CountrySerializer(serializers.ModelSerializer):
         fields = ["id", "name", "country_code", "abbr", "created_by", "date_created"]
         read_only_fields = ["id", "created_by", "date_created"]
 
-    def create(self, validated_data):
-        country = models.Country.objects.create(
-            created_by=self.context.get("created_by"), **validated_data
-        )
-        return country
     
 class GuestSerializer(serializers.ModelSerializer):
     title = serializers.SlugRelatedField(

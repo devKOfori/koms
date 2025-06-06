@@ -334,26 +334,27 @@ class DepartmentDetail(generics.RetrieveUpdateDestroyAPIView):
     lookup_url_kwarg = "pk"
     permission_classes = [custom_permissions.IsAdminProfileOrReadOnly]
 
-class CountryList(generics.ListCreateAPIView):
+class CountryList(generics.ListAPIView):
     queryset = models.Country.objects.all()
     serializer_class = api_serializers.CountrySerializer
-    permission_classes = [custom_permissions.IsAdminProfileOrReadOnly]
+    permission_classes = [IsAuthenticated]
 
-    def get_serializer_context(self):
-        context = super().get_serializer_context()
-        if self.request.user.is_authenticated:
-            try:
-                profile = models.Profile.objects.get(user=self.request.user)
-                context["created_by"] = profile
-            except models.Profile.DoesNotExist:
-                raise serializers.ValidationError({"error": "user account has no profile"})
-        return context
+class CountryCreateView(CreatedByMixin, generics.CreateAPIView):
+    queryset = models.Country.objects.all()
+    serializer_class = api_serializers.CountrySerializer
+    permission_classes = [custom_permissions.IsAdmin | custom_permissions.IsFrontDeskStaff]
     
-class CountryDetail(generics.RetrieveUpdateDestroyAPIView):
+class CountryUpdateDeleteView(UpdateDeleteView):
     queryset = models.Country.objects.all()
     serializer_class = api_serializers.CountrySerializer
     lookup_url_kwarg = "pk"
-    permission_classes = [custom_permissions.IsAdminProfileOrReadOnly]
+    permission_classes = [custom_permissions.IsAdmin | custom_permissions.IsFrontDeskStaff]
+
+class CountryRetrieveView(generics.RetrieveAPIView):
+    queryset = models.Country.objects.all()
+    serializer_class = api_serializers.CountrySerializer
+    lookup_url_kwarg = "pk"
+    permission_classes = [IsAuthenticated]
 
 class CustomUpdateView(APIView):
     def put(self, request, *args, **kwargs):

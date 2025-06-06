@@ -45,7 +45,9 @@ urlpatterns = [
     ),
 
     path("countries/", views.CountryList.as_view(), name="countries"),
-    path("countries/<uuid:pk>/", views.CountryDetail.as_view(), name="country_details"),
+    path("countries/add/", views.CountryCreateView.as_view(), name="add_country"),
+    path("countries/<uuid:pk>/edit/", views.CountryUpdateDeleteView.as_view(), name="edit_country"),
+    path("countries/<uuid:pk>/", views.CountryRetrieveView.as_view(), name="country_details"),
     
     path("genders/", views.GenderList.as_view(), name='genders'),
     path("genders/<uuid:pk>/", views.GenderDetail.as_view(), name="gender_details"),

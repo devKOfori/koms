@@ -136,6 +136,19 @@ class IsHouseKeepingStaff(BasePermission):
         
         return profile.is_member_of("Housekeeping")
     
+class IsFrontDeskStaff(BasePermission):
+    def has_permission(self, request, view):
+        """
+        Custom permission to allow access only to users with the 'Front Desk' role.
+        This permission is used to restrict access to views that require front desk privileges.
+        """
+        try:
+            profile: Profile = request.user.profile
+        except Profile.DoesNotExist:
+            return False
+        
+        return profile.is_member_of("Frontdesk")
+    
 class IsHouseKeepingStaffOrReadOnly(BasePermission):
     def has_permission(self, request, view):
         """
