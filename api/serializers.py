@@ -578,7 +578,6 @@ class NameTitleSerializer(serializers.ModelSerializer):
         fields = ["id", "name", "description", "created_by", "date_created"] 
         read_only_fields = ["id", "created_by", "date_created"]
 
-
 class PaymentTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.PaymentType
@@ -602,8 +601,7 @@ class CountrySerializer(serializers.ModelSerializer):
         model = models.Country
         fields = ["id", "name", "country_code", "abbr", "created_by", "date_created"]
         read_only_fields = ["id", "created_by", "date_created"]
-
-    
+  
 class GuestSerializer(serializers.ModelSerializer):
     title = serializers.SlugRelatedField(
         slug_field="name", queryset=models.NameTitle.objects.all()
@@ -747,8 +745,8 @@ class BookingSerializer(serializers.ModelSerializer):
 class IdentificationTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.IdentificationType
-        fields = ["id", "name"]
-        read_only_fields = ["id"]
+        fields = ["id", "name", "description", "created_by", "date_created"]
+        read_only_fields = ["id", "created_by", "date_created"]
 
 class CheckInSerializer(serializers.ModelSerializer):
     # guest = serializers.SlugRelatedField(

@@ -371,9 +371,27 @@ class ShiftStatusList(generics.ListCreateAPIView):
     queryset = models.ShiftStatus.objects.all()
     serializer_class = api_serializers.ShiftStatusSerializer
 
-class IdentificationTypeList(generics.ListCreateAPIView):
+class IdentificationTypeListView(generics.ListAPIView):
     queryset = models.IdentificationType.objects.all()
     serializer_class = api_serializers.IdentificationTypeSerializer
+    permission_classes = [IsAuthenticated]
+
+class IdentificationTypeCreateView(CreatedByMixin, generics.CreateAPIView):
+    queryset = models.IdentificationType.objects.all()
+    serializer_class = api_serializers.IdentificationTypeSerializer
+    permission_classes = [custom_permissions.IsAdmin | custom_permissions.IsFrontDeskStaff]
+
+class IdentificationTypeUpdateDeleteView(UpdateDeleteView):
+    queryset = models.IdentificationType.objects.all()
+    serializer_class = api_serializers.IdentificationTypeSerializer
+    lookup_url_kwarg = "pk"
+    permission_classes = [custom_permissions.IsAdmin | custom_permissions.IsFrontDeskStaff]
+
+class IdentificationTypeRetrieveView(generics.RetrieveAPIView):
+    queryset = models.IdentificationType.objects.all()
+    serializer_class = api_serializers.IdentificationTypeSerializer
+    lookup_url_kwarg = "pk"
+    permission_classes = [IsAuthenticated]
 
 class ShiftNoteList(generics.ListCreateAPIView):
     serializer_class = api_serializers.ShiftNoteSerializer

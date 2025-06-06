@@ -203,6 +203,9 @@ urlpatterns = [
     path("guests/", views.GuestList.as_view(), name="guests"),
     path("guests/<str:guest_id>/", views.GuestDetails.as_view(), name="guest_details"),
     
-    path("identification-types/", views.IdentificationTypeList.as_view(), name='identification_types'),
+    path("identification-types/", views.IdentificationTypeListView.as_view(), name='identification_types'),
+    path("identification-types/add/", views.IdentificationTypeCreateView.as_view(), name='add_identification_type'),
+    path("identification-types/<uuid:pk>/edit/", views.IdentificationTypeUpdateDeleteView.as_view(), name='edit_identification_type'),
+    path("identification-types/<uuid:pk>/", views.IdentificationTypeRetrieveView.as_view(), name='identification_type_details'),
 ]
 urlpatterns = format_suffix_patterns(urlpatterns)
