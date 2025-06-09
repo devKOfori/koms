@@ -716,6 +716,11 @@ class Guest(BaseModel):
 class PaymentType(BaseModel):
     # eg. cash, credit
     name = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+    created_by = models.ForeignKey(
+        Profile, on_delete=models.SET_NULL, null=True, related_name="payment_types_created"
+    )
+    date_created = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return self.name
@@ -753,7 +758,13 @@ class Sponsor(BaseModel):
         db_table = "sponsor"
 
 class PaymentMethod(BaseModel):
+    # e.g. cash, card, bank transfer, etc.
     name = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+    created_by = models.ForeignKey(
+        Profile, on_delete=models.SET_NULL, null=True, related_name="payment_methods_created"
+    )
+    date_created = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return self.name
@@ -830,9 +841,9 @@ class Booking(BaseModel):
         max_digits=11, decimal_places=2, default=0.00)
     payment_status = models.CharField(
         max_length=255, choices=choices.PAYMENT_STATUS_CHOICES, default="unpaid")
-    sponsor_type = models.ForeignKey(
-        SponsorType, on_delete=models.SET_NULL, null=True, blank=True, related_name="bookings"
-    )
+    booking_category = models.CharField(
+        max_length=255, choices=choices.BOOKING_CATEGORY_CHOICES, default="individual"
+    )  # e.g. individual, corporate, NGO, group, etc.
     date_created = models.DateTimeField(default=timezone.now, blank=True, null=True)
     created_by = models.ForeignKey(
         Profile,
@@ -945,7 +956,7 @@ class GuestLoyaltyPrograms(BaseModel):
         verbose_name_plural = "Guest Loyalty Programs"
 
 class Checkin(BaseModel):
-    booking_code = models.CharField(max_length=255, db_index=True)
+    booking_code = models.CharField(max_length=255, db_index=True, default="walk-in")
     guest = models.ForeignKey(
         Guest, on_delete=models.SET_NULL, null=True, blank=True, related_name="checkins"
     )
@@ -953,38 +964,107 @@ class Checkin(BaseModel):
     gender = models.CharField(max_length=12, null=True, blank=True)
     email = models.EmailField(max_length=255, blank=True, null=True)
     phone_number = models.CharField(max_length=20, blank=True, null=True)
-    room = models.ForeignKey(
-        Room, on_delete=models.SET_NULL, null=True, related_name="checkins"
+    identification_type = models.ForeignKey(
+        IdentificationType, on_delete=models.SET_NULL, null=True, blank=True
     )
-    room_number = models.CharField(max_length=255, db_index=True)
+    identification_number = models.CharField(max_length=255, blank=True, null=True)
+    country = models.ForeignKey(
+        Country, on_delete=models.SET_NULL, null=True, blank=True
+    )
+    emergency_contact_name = models.CharField(max_length=255, blank=True, null=True)
+    emergency_contact_phone = models.CharField(max_length=255, blank=True, null=True)
+    room = models.ForeignKey(
+        Room, on_delete=models.DO_NOTHING, related_name="checkins"
+    )
+    room_type = models.ForeignKey(RoomType, on_delete=models.SET_NULL, null=True)
     room_category = models.ForeignKey(
         RoomCategory, on_delete=models.SET_NULL, null=True
     )
-    room_type = models.ForeignKey(RoomType, on_delete=models.SET_NULL, null=True)
+    room_number = models.CharField(max_length=255, db_index=True)
     check_in_date = models.DateTimeField(default=timezone.now)
-    number_of_older_guests = models.PositiveIntegerField(default=1)
-    number_of_younger_guests = models.PositiveIntegerField(
+    number_of_guests = models.PositiveIntegerField(default=1)
+    number_of_children_guests = models.PositiveIntegerField(
         default=0, blank=True, null=True
     )
-    number_of_guests = models.PositiveIntegerField(default=1, blank=True, null=True)
-    sponsor = models.ForeignKey(Sponsor, on_delete=models.SET_NULL, null=True)
-    sponsor_name = models.CharField(max_length=255, blank=True, null=True)
-    payment_type = models.ForeignKey(
-        PaymentType, on_delete=models.SET_NULL, null=True, blank=True
-    )
-    total_payment = models.DecimalField(
-        max_digits=11, decimal_places=2, default=0.00, null=True
-    )
-    booking_payment_id = models.CharField(
-        max_length=255, blank=True, null=True
-    )  # field to store payment id for guests who have made payment for their booking
-    check_out_date = models.DateTimeField(default=timezone.now)
+    check_out_date = models.DateTimeField(null=True, blank=True)  # Optional, can be set later
+    note = models.TextField(blank=True, null=True)
     checked_out = models.BooleanField(default=False)
-
+    booking_category = models.CharField(
+        max_length=255, choices=choices.BOOKING_CATEGORY_CHOICES, default="individual"
+    )  # e.g. individual, corporate, NGO, group, etc.
+    sponsor = models.ForeignKey(
+        Sponsor, on_delete=models.SET_NULL, null=True, blank=True, related_name="checkins"
+    )
+    # payment_type = models.ForeignKey(PaymentType, on_delete=models.SET_NULL, null=True, blank=True) # e.g. cash, credit, etc.
+    created_by = models.ForeignKey(
+        Profile, on_delete=models.SET_NULL, null=True, related_name="checkins_created"
+    )
+    date_created = models.DateTimeField(auto_now_add=True)
     class Meta(BaseModel.Meta):
         db_table="checkin"
         verbose_name="Check-In"
         verbose_name_plural = "Check-Ins"
+
+    def __str__(self):
+        return f"Check-In for {self.guest_name} in {self.room_number} ({self.check_in_date})"
+
+class HotelPolicy(BaseModel):
+    """
+    Model to represent hotel policies.
+    This model includes various fields to capture different aspects of hotel policies,
+    such as boolean fields for specific policies, date fields for important dates,
+    integer fields for limits, float fields for fees, and text fields for detailed descriptions.
+    typical use cases include specifying policies for requiring payment for room charges during check-in,
+    allowing pets, smoking, children, parties, late check-in, and more.
+    """
+    name = models.CharField(max_length=255, unique=True)
+    description = models.TextField(blank=True, null=True)
+    created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True)
+    date_created = models.DateTimeField(auto_now_add=True)
+    boolean_field_1 = models.BooleanField(default=False, null=True, blank=True)  # e.g. allow pets
+    boolean_field_2 = models.BooleanField(default=False, null=True, blank=True)  # e.g. allow smoking
+    boolean_field_3 = models.BooleanField(default=False, null=True, blank=True)  # e.g. allow children
+    boolean_field_4 = models.BooleanField(default=False, null=True, blank=True)  # e.g. allow parties
+    boolean_field_5 = models.BooleanField(default=False, null=True, blank=True)  # e.g. allow late check-in
+    date_field_1 = models.DateTimeField(
+        default=timezone.now, null=True, blank=True
+    )
+    date_field_2 = models.DateTimeField(
+        default=timezone.now, null=True, blank=True
+    )  # e.g. check-in time
+    date_field_3 = models.DateTimeField(
+        default=timezone.now, null=True, blank=True
+    )  # e.g. check-out time
+    date_field_4 = models.DateTimeField(
+        default=timezone.now, null=True, blank=True
+    )  # e.g. cancellation deadline
+    date_field_5 = models.DateTimeField(
+        default=timezone.now, null=True, blank=True
+    )  # e.g. refund deadline
+    integer_field_1 = models.IntegerField(default=0, null=True, blank=True)  # e.g. max guests
+    integer_field_2 = models.IntegerField(default=0, null=True, blank=True)  # e.g. max children
+    integer_field_3 = models.IntegerField(default=0, null=True, blank=True)  # e.g. max pets
+    integer_field_4 = models.IntegerField(default=0, null=True, blank=True)  # e.g. max parties
+    integer_field_5 = models.IntegerField(default=0, null=True, blank=True)  # e.g. max late check-in hours
+    float_field_1 = models.FloatField(default=0.0, null=True, blank=True)  # e.g. late check-in fee
+    float_field_2 = models.FloatField(default=0.0, null=True, blank=True)  # e.g. pet fee
+    float_field_3 = models.FloatField(default=0.0, null=True, blank=True)  # e.g. smoking fee
+    float_field_4 = models.FloatField(default=0.0, null=True, blank=True)  # e.g. party fee
+    float_field_5 = models.FloatField(default=0.0, null=True, blank=True)  # e.g. children fee
+    text_field_1 = models.TextField(blank=True, null=True)  # e.g. pet policy
+    text_field_2 = models.TextField(blank=True, null=True)  # e.g. smoking policy
+    text_field_3 = models.TextField(blank=True, null=True)  # e.g. children policy
+    text_field_4 = models.TextField(blank=True, null=True)  # e.g. party policy
+    text_field_5 = models.TextField(blank=True, null=True)  # e.g. late check-in policy
+
+
+    def __str__(self):
+        return self.name
+
+    class Meta(BaseModel.Meta):
+        db_table = "hotelpolicy"
+        verbose_name = "Hotel Policy"
+        verbose_name_plural = "Hotel Policies"
 
 class CheckinPayment(BaseModel):
     check_in = models.ForeignKey(Checkin, on_delete=models.DO_NOTHING)

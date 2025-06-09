@@ -869,8 +869,6 @@ class BookingRetrieveView(generics.RetrieveAPIView):
     lookup_url_kwarg = "pk"
     permission_classes = [custom_permissions.IsFrontDeskStaff | custom_permissions.IsAdmin]
 
-
-
 class BookingExtend(APIView):
     def post(self, request):
         booking_id = request.data.get("booking_id")
@@ -941,6 +939,16 @@ class BookingCheckout(APIView):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+class CheckInListView(generics.ListAPIView):
+    queryset = models.Checkin.objects.all()
+    serializer_class = api_serializers.CheckInSerializer
+    permission_classes = [custom_permissions.IsFrontDeskStaff | custom_permissions.IsAdmin]
+
+class CheckInCreateView(CreatedByMixin, generics.CreateAPIView):
+    queryset = models.Checkin.objects.all()
+    serializer_class = api_serializers.CheckInSerializer
+    permission_classes = [custom_permissions.IsFrontDeskStaff | custom_permissions.IsAdmin]
+
 class RoomCategoryCreateView(CreatedByMixin, generics.CreateAPIView):
     queryset = models.RoomCategory.objects.all()
     serializer_class = api_serializers.RoomCategorySerializer
@@ -962,6 +970,7 @@ class RoomCategoryRetrieveView(generics.RetrieveAPIView):
     serializer_class = api_serializers.RoomCategorySerializer
     lookup_url_kwarg = "pk"
     permission_classes = [custom_permissions.IsHouseKeepingStaff | custom_permissions.IsAdmin, custom_permissions.IsDepartmentExec]
+
 
 
 class FloorList(CreatedByMixin, generics.ListCreateAPIView):

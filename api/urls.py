@@ -209,5 +209,8 @@ urlpatterns = [
     path(
         "bookings/checkout/", views.BookingCheckout.as_view(), name="checkout_booking"
     ),
+
+    path("check-in/", views.CheckInListView.as_view(), name="check_ins"),
+    path("check-in/add/", views.CheckInCreateView.as_view(), name="add_check_in"),
 ]
 urlpatterns = format_suffix_patterns(urlpatterns)

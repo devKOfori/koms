@@ -778,7 +778,16 @@ class BookingSerializer(serializers.ModelSerializer):
         with transaction.atomic():
             guest: models.Guest = models.Guest.objects.create(
                 guest_id=generators.generate_guest_id(),
-                user=None,
+                user=models.CustomUser.objects.create_user(
+                    username=f"{guest_data['first_name'].lower()}.{guest_data['last_name'].lower()}",
+                    first_name=guest_data["first_name"],
+                    last_name=guest_data["last_name"],
+                    password=f"{guest_data['first_name'].lower()}.{guest_data['last_name'].lower()}{generators.generate_guest_id()[-4:]}", 
+                    is_staff=False,
+                    is_active=False,
+                    email=guest_data.get("email", ""),
+                    user_category="guest",
+                ),
                 **guest_data,
                 created_by=validated_data["created_by"]
             )
@@ -840,33 +849,144 @@ class CheckInSerializer(serializers.ModelSerializer):
     # guest = serializers.SlugRelatedField(
     #     slug_field="guest_id", queryset=models.Guest.objects.all(), required=False, allow_null=True
     # )
+    gender = serializers.SlugRelatedField(
+        slug_field="name", queryset=models.Gender.objects.all(), required=False, allow_null=True
+    )
+    country = serializers.SlugRelatedField(
+        slug_field="name", queryset=models.Country.objects.all(), required=False, allow_null=True
+    )
+    identification_type = serializers.SlugRelatedField(
+        slug_field="name", queryset=models.IdentificationType.objects.all(), required=False, allow_null=True
+    )
+    room = serializers.SlugRelatedField(
+        slug_field="room_number", queryset=models.Room.objects.all(), required=True
+    )
     class Meta:
         model = models.Checkin
         fields = [
             "id",
-            # "booking_code",
+            "booking_code",
             # "guest",
             "guest_id",
             "guest_name",
             "gender",
             "email",
             "phone_number",
+            "identification_type",
+            "identification_number",
+            "country",
+            "emergency_contact_name",
+            "emergency_contact_phone",
             "room",
             "room_type",
+            "room_category",
             "check_in_date",
-            "number_of_older_guests",
-            "number_of_younger_guests",
-            "number_of_guests",
-            "sponsor",
-            "total_payment",
             "check_out_date",
             "checked_out",
+            "number_of_guests",
+            "number_of_children_guests",
+            "sponsor",
+            "booking_category",
+            # "payment_type",
+            "note",
+            "created_by",
+            "date_created",
         ]
         read_only_fields = [
             "id",
+            "guest_id",
             "checked_out",
-            "number_of_guests",
+            "room_type",
+            "room_category",
+            "created_by",
+            "date_created",
+            # "payment_type",
+
         ]
+
+    def create(self, validated_data):
+        booking_code = validated_data.get("booking_code")
+        with transaction.atomic():
+            if booking_code == "walk-in":
+                guest_name = validated_data["guest_name"]
+                first_name, last_name = guest_name.split(" ")
+                guest = models.Guest.objects.create(
+                    guest_id=generators.generate_guest_id(),
+                    user=models.CustomUser.objects.create_user(
+                        username=f"{first_name.lower()}.{last_name.lower()}",
+                        first_name=first_name,
+                        last_name=last_name,
+                        password=f"{first_name.lower()}.{last_name.lower()}{generators.generate_guest_id()[-4:]}", 
+                        is_staff=False,
+                        is_active=False,
+                        email=validated_data.get("email", ""),
+                        user_category="guest"
+                    ),
+                    first_name=first_name,
+                    last_name=last_name,
+                    gender=validated_data.get("gender", ""),
+                    email=validated_data.get("email", ""),
+                    phone_number=validated_data.get("phone_number", ""),
+                    identification_type=validated_data.get("identification_type", None),
+                    identification_number=validated_data.get("identification_number", ""),
+                    country=validated_data.get("country", None),
+                    emergency_contact_name=validated_data.get("emergency_contact_name", ""),
+                    emergency_contact_phone=validated_data.get("emergency_contact_phone", ""),
+                    created_by=validated_data.get("created_by", None)
+                )
+            else:
+                try:
+                    booking = models.Booking.objects.get(booking_code=booking_code)
+                    guest = booking.guest
+                except models.Booking.DoesNotExist:
+                    raise serializers.ValidationError(
+                        {"error": f"Booking with code '{booking_code}' does not exist."},
+                        code=status.HTTP_400_BAD_REQUEST,
+                    )
+                
+            room: models.Room = validated_data.get("room")
+            if room.is_occupied:
+                raise serializers.ValidationError(
+                    {"error": f"Room {room.room_number} is already occupied."},
+                    code=status.HTTP_400_BAD_REQUEST,
+                )
+            if not room.is_available:
+                raise serializers.ValidationError(
+                    {"error": f"Room {room.room_number} is not available for check-in."},
+                    code=status.HTTP_400_BAD_REQUEST,
+                )
+            if not room.is_cleaned:
+                raise serializers.ValidationError(
+                    {"error": f"Room {room.room_number} is not cleaned."},
+                    code=status.HTTP_400_BAD_REQUEST,
+                )
+            room_type = room.room_type
+            room_category = room.room_category
+            room_number = room.room_number
+
+            
+            check_in = models.Checkin.objects.create(
+            # booking_code=booking_code,
+            guest=guest,
+            # guest_name=guest.full_name,
+            **validated_data,
+            room_type=room_type,
+            room_category=room_category,
+            room_number=room_number
+            )
+            room.is_occupied = True
+            room.is_available = False
+            room.is_cleaned = False
+            room.current_guest = guest
+            room.room_maintenance_status = "in-use"
+            room.room_booking_status = "booked"
+            room.save()
+
+        return check_in
+        
+
+
+
 
 class AmenitySerializer(serializers.ModelSerializer):
     class Meta:

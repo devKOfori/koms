@@ -1,4 +1,5 @@
 ROOM_MAINTENANCE_STATUS_CHOICES = [
+    ("in-use", "In Use"),
     ("default", "Default"),
     ("cleaned", "Cleaned"),
     ("under-maintenance", "Under-maintenance"),
@@ -56,4 +57,13 @@ PAYMENT_STATUS_CHOICES = [
     ("unpaid", "Unpaid"),
     ("partially-paid", "Partially Paid"),
     ("refunded", "Refunded"),
+]
+
+BOOKING_CATEGORY_CHOICES = [
+    ("individual", "Individual"),
+    ("corporate", "Corporate"),
+    ("ngo", "NGO"),
+    ("group", "Group"),
+    ("event", "Event"),
+    ("long-term", "Long Term"),
 ]
