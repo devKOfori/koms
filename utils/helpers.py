@@ -141,3 +141,21 @@ def checkout_booking(booking, checked_out_by):
         return "success"
     except Exception as e:
         raise serializers.ValidationError({'error': f'an unexpected error occured: {str(e)}'})
+    
+def get_room_type_current_price(room_type: models.RoomType) -> float:
+    """
+    Retrieves the current price of a room type.
+    
+    Args:
+        room_type (models.RoomType): The room type instance.
+        
+    Returns:
+        float: The current price of the room type.
+    """
+    return room_type.base_price
+
+def calculate_booking_cost(booking: models.Booking) -> float:
+    booking_duration = (booking.check_out_date - booking.check_in_date).days
+    cost_per_day = get_room_type_current_price(booking.room_type)
+    total_cost = booking_duration * cost_per_day
+    return total_cost

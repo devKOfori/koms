@@ -26,3 +26,34 @@ ASSIGN_COMPLAINT_STATUS_CHOICES = [
     ("resolved", "Resolved"),
     (None, "Default"),
 ]
+
+USER_CATEGORY_CHOICES = [
+    ("staff", "Staff"),
+    ("guest", "Guest"),
+]
+
+BOOKING_SOURCE_CHOICES = [
+    ("walk-in", "Walk-in"),
+    ("online", "Online"),
+    ("phone", "Phone"),
+    ("email", "Email"),
+    ("travel-agency", "Travel Agency"),
+    ("corporate", "Corporate"),
+    ("other", "Other"),
+]
+
+BOOKING_STATUS_CHOICES = [
+    ("confirmed", "Confirmed"),
+    ("cancelled", "Cancelled"),
+    ("checked-in", "Checked In"),
+    ("checked-out", "Checked Out"),
+    ("no-show", "No Show"),
+    ("pending", "Pending"),
+]
+
+PAYMENT_STATUS_CHOICES = [
+    ("paid", "Paid"),
+    ("unpaid", "Unpaid"),
+    ("partially-paid", "Partially Paid"),
+    ("refunded", "Refunded"),
+]

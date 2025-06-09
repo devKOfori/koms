@@ -847,20 +847,29 @@ class GenderDetail(generics.RetrieveUpdateDestroyAPIView):
     lookup_url_kwarg = "pk"
     permission_classes = [custom_permissions.IsAdminProfileOrReadOnly]
 
-class BookingList(generics.ListCreateAPIView):
+class BookingList(generics.ListAPIView):
     queryset = models.Booking.objects.all()
     serializer_class = api_serializers.BookingSerializer
+    permission_classes = [custom_permissions.IsFrontDeskStaff | custom_permissions.IsAdmin]
 
-    def get_serializer_context(self):
-        context = super().get_serializer_context()
-        try:
-            profile = models.Profile.objects.get(user=self.request.user)
-        except models.Profile.DoesNotExist:
-            return Response(
-                {"error": "User not authenticated"}, status=status.HTTP_400_BAD_REQUEST
-            )
-        context["authored_by"] = profile
-        return context
+class BookingCreateView(CreatedByMixin, generics.CreateAPIView):
+    queryset = models.Booking.objects.all()
+    serializer_class = api_serializers.BookingSerializer
+    permission_classes = [custom_permissions.IsFrontDeskStaff | custom_permissions.IsAdmin]
+
+class BookingUpdateDeleteView(UpdateDeleteView):
+    queryset = models.Booking.objects.all()
+    serializer_class = api_serializers.BookingSerializer
+    lookup_url_kwarg = "pk"
+    permission_classes = [custom_permissions.IsFrontDeskStaff | custom_permissions.IsAdmin]
+
+class BookingRetrieveView(generics.RetrieveAPIView):
+    queryset = models.Booking.objects.all()
+    serializer_class = api_serializers.BookingSerializer
+    lookup_url_kwarg = "pk"
+    permission_classes = [custom_permissions.IsFrontDeskStaff | custom_permissions.IsAdmin]
+
+
 
 class BookingExtend(APIView):
     def post(self, request):

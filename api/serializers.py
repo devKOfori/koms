@@ -658,61 +658,94 @@ class GuestSerializer(serializers.ModelSerializer):
             )
             return guest
 
+class BookingPaymentSerializer(serializers.ModelSerializer):
+    payment_type = serializers.SlugRelatedField(
+        slug_field="name", queryset=models.PaymentType.objects.all()
+    )
+    amount = serializers.DecimalField(
+        max_digits=10, decimal_places=2, required=True
+    )
+    receipt_number = serializers.SlugRelatedField(
+        slug_field="receipt_number", queryset=models.Receipt.objects.all(), required=False
+    )
+
+    class Meta:
+        model = models.BookingPayment
+        fields = [
+            "id",
+            # "booking",
+            "payment_type",
+            "amount_paid",
+            "receipt_number",
+            "payment_timestamp",
+            "date_created",
+            "created_by",
+            "last_modified_by",
+            "date_modified",
+        ]
+        read_only_fields = [
+            "id",
+            "booking",
+            # "payment_timestamp",
+            "date_created",
+            "created_by",
+            "last_modified_by",
+            "date_modified",
+        ]
+
 class BookingSerializer(serializers.ModelSerializer):
     guest = GuestSerializer(write_only=True)
-    payment_status = serializers.SlugRelatedField(
-        slug_field="name", read_only=True)
-    # room_category = serializers.SlugRelatedField(
-    #     slug_field="name", queryset=models.RoomCategory.objects.all(), required=False
-    # )
+    # payment_status = serializers.SlugRelatedField(
+    #     slug_field="name", read_only=True)
+    room_category = serializers.SlugRelatedField(
+        slug_field="name", queryset=models.RoomCategory.objects.all(), required=False
+    )
     room_type = serializers.SlugRelatedField(
         slug_field="name", queryset=models.RoomType.objects.all()
     )
-    number_of_younger_guests = serializers.IntegerField(required=False)
-    number_of_guests = serializers.IntegerField(read_only=True)
-
+    # number_of_younger_guests = serializers.IntegerField(required=False)
+    # number_of_guests = serializers.IntegerField(read_only=True)
+    booking_payments = BookingPaymentSerializer(
+        many=True, required=False, allow_null=True)
+    
     class Meta:
         model = models.Booking
         fields = [
             "id",
             "guest",
-            "guest_id",
             "guest_name",
+            "gender",
             "email",
             "phone_number",
-            # "room_category",
             "room_type",
-            "room_number",
+            "room_category",
+            "number_of_guests",
+            "number_of_children_guests",
             "booking_code",
             "check_in_date",
             "check_out_date",
-            "number_of_older_guests",
-            "number_of_younger_guests",
-            "number_of_guests",
-            "rate",
-            "amount_paid",
-            "promo_code",
-            "vip_status",
-            # "sponsor",
-            "payment_status",
             "note",
+            "booking_source",
+            "booking_status",
+            # "sponsor",
+            "booking_cost",
+            "payment_status",
+            "booking_payments",
             "date_created",
             "created_by",
         ]
         read_only_fields = [
             "id",
-            "guest_id",
-            "room_number",
             "booking_code",
             "guest_name",
+            "gender",
             "email",
-            "room_category",
             "phone_number",
-            "created_by",
-            "rate",
-            "vip_status",
             "number_of_guests",
+            "booking_status",
+            "booking_cost",
             "payment_status",
+            "date_created",
             "created_by",
         ]
 
@@ -740,24 +773,62 @@ class BookingSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        creator = self.context.get("authored_by")
-        guest_data = validated_data.pop("guest")
-        print(guest_data)
+        guest_data = validated_data.pop("guest", None)
+        payments_data = validated_data.pop("booking_payments", None)
         with transaction.atomic():
-            guest = models.Guest.objects.create(guest_id=generators.generate_guest_id(), **guest_data)
+            guest: models.Guest = models.Guest.objects.create(
+                guest_id=generators.generate_guest_id(),
+                user=None,
+                **guest_data,
+                created_by=validated_data["created_by"]
+            )
             booking = models.Booking.objects.create(
                 guest=guest,
-                guest_name=f"{guest.first_name} {guest.last_name}",
-                booking_code=generators.generate_booking_code(),
+                guest_name=guest.full_name,
+                gender=guest.gender.name,
                 email=guest.email,
                 phone_number=guest.phone_number,
-                room_category=validated_data.get("room_type").room_category,
-                number_of_guests=validated_data.get("number_of_older_guests", 0)
-                + validated_data.get("number_of_younger_guests", 0),
-                created_by=creator,
+                booking_code=generators.generate_booking_code(),
                 **validated_data,
             )
-            return booking
+            booking_cost = helpers.calculate_booking_cost(booking=booking)
+            booking.booking_cost = booking_cost
+            total_amount_paid = 0
+            if payments_data:
+                for payment_data in payments_data:
+                    total_amount_paid += payment_data.get("amount_paid", 0)
+                    payment_data["booking"] = booking
+                    payment_data["created_by"] = validated_data["created_by"]
+                    models.BookingPayment.objects.create(**payment_data)
+            if total_amount_paid > 0 and total_amount_paid < booking_cost:
+                booking.payment_status = "partially-paid"
+            elif total_amount_paid >= booking_cost:
+                booking.payment_status = "paid"
+            else:
+                booking.payment_status = "unpaid"
+            booking.save()
+        return booking
+
+    def update(self, instance, validated_data):
+        guest_data = validated_data.pop("guest", None)
+        payments_data = validated_data.pop("booking_payments", None)
+        with transaction.atomic():
+            if guest_data:
+                for attr, value in guest_data.items():
+                    setattr(instance.guest, attr, value)
+                print(f"guest_data: {guest_data}")
+                print(f"instance.guest: {instance.guest}")
+                instance.guest.save()
+            for attr, value in validated_data.items():
+                setattr(instance, attr, value)
+            instance.guest_name = instance.guest.full_name
+            instance.save()
+            if payments_data:
+                for payment_data in payments_data:
+                    payment_data["booking"] = instance
+                    payment_data["created_by"] = validated_data["created_by"]
+                    models.BookingPayment.objects.create(**payment_data)
+        return instance
         
 class IdentificationTypeSerializer(serializers.ModelSerializer):
     class Meta:

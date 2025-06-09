@@ -139,13 +139,7 @@ urlpatterns = [
     path("rooms/<uuid:pk>/", views.RoomRetrieveView.as_view(), name="room_details"),
     path("rooms/<uuid:pk>/edit/", views.RoomUpdateDeleteView.as_view(), name="edit_room"),
     path("room-amenities/", views.RoomAmenityList.as_view(), name="room_amenities"),
-    # urls for booking management
-    path("bookings/", views.BookingList.as_view(), name="bookings"),
-    path("bookings/extend/", views.BookingExtend.as_view(), name="extend_booking"),
-    path("bookings/<uuid:pk>/", views.BookingDetail.as_view(), name="booking_details"),
-    path(
-        "bookings/checkout/", views.BookingCheckout.as_view(), name="checkout_booking"
-    ),
+    
     # urls for complaint management
     path("complaints/", views.ComplaintList.as_view(), name="complaints"),
     path("complaints/add/", views.ComplaintCreate.as_view(), name="add_complaint"),
@@ -204,5 +198,16 @@ urlpatterns = [
     path("identification-types/add/", views.IdentificationTypeCreateView.as_view(), name='add_identification_type'),
     path("identification-types/<uuid:pk>/edit/", views.IdentificationTypeUpdateDeleteView.as_view(), name='edit_identification_type'),
     path("identification-types/<uuid:pk>/", views.IdentificationTypeRetrieveView.as_view(), name='identification_type_details'),
+
+    # urls for booking management
+    path("bookings/", views.BookingList.as_view(), name="bookings"),
+    path("bookings/add/", views.BookingCreateView.as_view(), name="add_booking"),
+    path("bookings/<uuid:pk>/edit/", views.BookingUpdateDeleteView.as_view(), name="edit_booking"),
+    path("bookings/<uuid:pk>/", views.BookingRetrieveView.as_view(), name="booking_details"),
+    path("bookings/extend/", views.BookingExtend.as_view(), name="extend_booking"),
+    path("bookings/<uuid:pk>/", views.BookingDetail.as_view(), name="booking_details"),
+    path(
+        "bookings/checkout/", views.BookingCheckout.as_view(), name="checkout_booking"
+    ),
 ]
 urlpatterns = format_suffix_patterns(urlpatterns)

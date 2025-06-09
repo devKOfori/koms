@@ -709,7 +709,9 @@ class Guest(BaseModel):
         return f"{self.first_name} {self.last_name}"
 
     class Meta(BaseModel.Meta):
-        db_table = "Guest"
+        db_table = "guest"
+        verbose_name = "Guest"
+        verbose_name_plural = "Guests"
 
 class PaymentType(BaseModel):
     # eg. cash, credit
@@ -803,47 +805,35 @@ class Booking(BaseModel):
     phone_number = models.CharField(max_length=20, blank=True, null=True)
 
     # Room-related fields
-    room_number = models.CharField(max_length=255, blank=True, null=True, db_index=True)
-    room = models.ForeignKey(
-        Room, on_delete=models.SET_NULL, null=True, related_name="bookings"
+    room_type = models.ForeignKey(
+        RoomType, on_delete=models.SET_NULL, null=True, related_name="bookings"
     )
     room_category = models.ForeignKey(
         RoomCategory, on_delete=models.SET_NULL, null=True, related_name="bookings"
     )
-    room_type = models.ForeignKey(
-        RoomType, on_delete=models.SET_NULL, null=True, related_name="bookings"
-    )
-
+    number_of_guests = models.PositiveIntegerField(default=1)
+    number_of_children_guests = models.PositiveIntegerField(
+        default=0, blank=True, null=True
+    )  # number of children guests (under 12 years)
     # Booking-related fields
     booking_code = models.CharField(
         max_length=255, blank=True, null=True
     )  # this field is used in authenticating Guest complaints and requests
-    vip_status = models.ForeignKey("VIPStatus", on_delete=models.SET_NULL, null=True)
     check_in_date = models.DateTimeField(default=timezone.now)
     check_out_date = models.DateTimeField(default=timezone.now)
-    number_of_guests = models.PositiveIntegerField(default=1)
-    number_of_older_guests = models.PositiveIntegerField(default=1)
-    number_of_younger_guests = models.PositiveIntegerField(
-        default=0, blank=True, null=True
-    )
-    arrival_mode = models.ForeignKey(
-        "ArrivalMode", on_delete=models.SET_NULL, null=True
-    )
-    rate = models.DecimalField(max_digits=11, decimal_places=2, default=0.00)
-    promo_code = models.CharField(max_length=255, blank=True, null=True)
-
-    # payment information
-    amount_paid = models.DecimalField(max_digits=11, decimal_places=2, default=0.00)
-    payment_status = models.ForeignKey(
-        "PaymentStatus", on_delete=models.SET_NULL, null=True
-    )
-    receipt = models.ForeignKey(
-        Receipt, on_delete=models.SET_NULL, null=True, blank=True
-    )
     note = models.TextField(blank=True, null=True)
-
+    booking_source = models.CharField(
+        max_length=255, choices=choices.BOOKING_SOURCE_CHOICES, default="walk-in")
+    booking_status = models.CharField(
+        max_length=255, choices=choices.BOOKING_STATUS_CHOICES, default="pending")
+    booking_cost = models.DecimalField(
+        max_digits=11, decimal_places=2, default=0.00)
+    payment_status = models.CharField(
+        max_length=255, choices=choices.PAYMENT_STATUS_CHOICES, default="unpaid")
+    sponsor_type = models.ForeignKey(
+        SponsorType, on_delete=models.SET_NULL, null=True, blank=True, related_name="bookings"
+    )
     date_created = models.DateTimeField(default=timezone.now, blank=True, null=True)
-    date_modified = models.DateTimeField(default=timezone.now, blank=True, null=True)
     created_by = models.ForeignKey(
         Profile,
         on_delete=models.SET_NULL,
@@ -851,16 +841,11 @@ class Booking(BaseModel):
         blank=True,
         related_name="bookings_created",
     )
-    modified_by = models.ForeignKey(
-        Profile,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="bookings_modified",
-    )
+    date_modified = models.DateTimeField(default=timezone.now, blank=True, null=True)
+
 
     def __str__(self):
-        return self.booking_code or f"Booking for {self.guest_name} in {self.room_number}"
+        return self.booking_code or f"Booking for {self.guest_name} in {self.room_type}"
 
     def extend_booking(self, num_days: int):
         """
@@ -884,6 +869,26 @@ class Booking(BaseModel):
 
     class Meta(BaseModel.Meta):
         db_table = "booking"
+
+class BookingPayment(BaseModel):
+    booking = models.ForeignKey(Booking, on_delete=models.CASCADE, related_name="payments")
+    payment_method = models.ForeignKey(
+        PaymentMethod, on_delete=models.SET_NULL, null=True, blank=True
+    )
+    amount_paid = models.DecimalField(max_digits=11, decimal_places=2, default=0.00)
+    receipt = models.ForeignKey(
+        Receipt, on_delete=models.SET_NULL, null=True, blank=True, related_name="booking_payments"
+    )
+    payment_timestamp = models.DateTimeField(default=timezone.now)
+    date_created = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(
+        Profile, on_delete=models.SET_NULL, null=True, blank=True, related_name="booking_payments"
+    )
+    last_modified_by = models.ForeignKey(
+        Profile, on_delete=models.SET_NULL, null=True, blank=True, related_name="modified_booking_payments"
+    )
+    date_modified = models.DateTimeField(auto_now=True)
+
 
 class ArrivalMode(BaseModel):
     name = models.CharField(max_length=255)
